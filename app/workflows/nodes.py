@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.services.analyzers.paper_analyzer import PaperAnalysisResult, PaperAnalyzer
 from app.services.analyzers.research_gap_finder import ResearchGapFinder, ResearchGapItem, ResearchGapResult
 from app.services.analyzers.trend_analyzer import TrendAnalyzer, TrendAnalysisResult
+from app.services.collectors.arxiv_source import ArxivPaperSource
 from app.services.collectors.base import CollectedPaper
 from app.services.collectors.paper_collector import PaperCollector
 from app.services.collectors.pubmed_source import PubMedPaperSource
@@ -48,7 +49,7 @@ def collect_papers(
     *,
     paper_collector: PaperCollector | None = None,
     source_papers: list[CollectedPaper] | None = None,
-    paper_source: PubMedPaperSource | None = None,
+    paper_source: object | None = None,
     progress_callback=None,
 ) -> ResearchState:
     _emit_progress(
@@ -61,14 +62,18 @@ def collect_papers(
     papers = source_papers
     if papers is None:
         try:
-            papers = (paper_source or PubMedPaperSource(limit=state.max_results)).fetch(
+            active_source = paper_source or _paper_source_for_database(
+                state.database,
+                limit=state.max_results,
+            )
+            papers = active_source.fetch(
                 state.topic,
                 start_date=state.date_range[0],
                 end_date=state.date_range[1],
                 limit=state.max_results,
             )
         except Exception as exc:  # pragma: no cover
-            state.errors.append(f"pubmed_fetch_failed: {exc}")
+            state.errors.append(f"{state.database}_fetch_failed: {exc}")
             papers = []
     state.papers = collector.collect_from_papers(papers, topic=state.topic, venues=state.venues)
     _emit_progress(
@@ -80,6 +85,16 @@ def collect_papers(
         total=len(state.papers),
     )
     return state
+
+
+def _paper_source_for_database(database: str, *, limit: int) -> object:
+    normalized = (database or "pubmed").strip().lower()
+    source_map = {
+        "pubmed": PubMedPaperSource,
+        "arxiv": ArxivPaperSource,
+    }
+    source_cls = source_map.get(normalized, PubMedPaperSource)
+    return source_cls(limit=limit)
 
 
 def analyze_papers(

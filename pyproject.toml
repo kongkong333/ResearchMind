@@ -5,6 +5,7 @@ description = "AI research agent for weekly conference reports"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+  "arxiv>=4.0.0,<5.0.0",
   "fastapi>=0.115.0,<1.0.0",
   "openai>=1.35.0,<2.0.0",
   "sqlalchemy>=2.0.30,<3.0.0",

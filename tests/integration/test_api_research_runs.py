@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from app.main import SimpleTestClient, create_app
+from app.services.collectors.arxiv_source import ArxivPaperSource
 from app.services.collectors.base import CollectedPaper
 from app.services.collectors.pubmed_source import PubMedPaperSource
 
@@ -69,37 +70,36 @@ def test_research_run_endpoints_return_stubbed_contract(monkeypatch: pytest.Monk
     client = _make_client(monkeypatch)
     fetch_calls: list[dict[str, object]] = []
 
-    monkeypatch.setattr(
-        PubMedPaperSource,
-        "fetch",
-        lambda self, topic, start_date=None, end_date=None, limit=None: (
-            fetch_calls.append(
-                {
-                    "topic": topic,
-                    "start_date": start_date,
-                    "end_date": end_date,
-                    "limit": limit,
-                }
+    def fake_fetch(self, topic, start_date=None, end_date=None, limit=None):
+        fetch_calls.append(
+            {
+                "topic": topic,
+                "start_date": start_date,
+                "end_date": end_date,
+                "limit": limit,
+                "database": getattr(self, "SOURCE_NAME", "pubmed"),
+            }
+        )
+        return [
+            CollectedPaper(
+                source_id="p1",
+                title="Agent Planning with Memory",
+                authors=["Alice"],
+                abstract="Planning and memory for agent workflows.",
+                year=2024,
+                venue="ICLR",
+                url="https://example.com/p1",
+                keywords=["Agent", "Memory", "Planning"],
             )
-            or [
-                CollectedPaper(
-                    source_id="p1",
-                    title="Agent Planning with Memory",
-                    authors=["Alice"],
-                    abstract="Planning and memory for agent workflows.",
-                    year=2024,
-                    venue="ICLR",
-                    url="https://example.com/p1",
-                    keywords=["Agent", "Memory", "Planning"],
-                )
-            ]
-        ),
-    )
+        ]
 
+    monkeypatch.setattr(PubMedPaperSource, "fetch", fake_fetch)
+    monkeypatch.setattr(ArxivPaperSource, "fetch", fake_fetch)
     create_response = client.post(
         "/research-runs",
         json={
             "topic": "agent systems",
+            "database": "arxiv",
             "start_date": "2025-01-01",
             "max_results": 7,
             "openai_api_key": "test-key",
@@ -112,11 +112,13 @@ def test_research_run_endpoints_return_stubbed_contract(monkeypatch: pytest.Monk
     run_id = created["run_id"]
     assert created["status"] in {"pending", "running", "awaiting_selection"}
     assert len(created["stages"]) == 5
+    assert created["database"] == "arxiv"
     assert fetch_calls
     assert fetch_calls[0]["topic"] == "agent systems"
     assert str(fetch_calls[0]["start_date"]) == "2025-01-01"
     assert fetch_calls[0]["end_date"] is None
     assert fetch_calls[0]["limit"] == 7
+    assert fetch_calls[0]["database"] == "arxiv"
 
     get_response = client.get(f"/research-runs/{run_id}")
     assert get_response.status_code == 200
@@ -133,6 +135,7 @@ def test_research_run_endpoints_return_stubbed_contract(monkeypatch: pytest.Monk
     assert latest_payload["papers"]
     assert latest_payload["selected_source_ids"]
     assert latest_payload["report_path"] is None
+    assert latest_payload["database"] == "arxiv"
 
     analyze_response = client.post(
         f"/research-runs/{run_id}/analyze",

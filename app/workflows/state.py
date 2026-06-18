@@ -10,6 +10,7 @@ from app.services.collectors.base import CollectedPaper
 @dataclass(slots=True)
 class ResearchState:
     topic: str
+    database: str = "pubmed"
     run_id: str = field(default_factory=lambda: str(uuid4()))
     date_range: tuple[date | None, date | None] = (None, None)
     max_results: int = 5

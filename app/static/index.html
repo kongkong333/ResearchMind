@@ -9,66 +9,107 @@
   <body>
     <div id="app">
       <aside class="sidebar">
-        <section class="panel llm-settings-card">
-          <p class="eyebrow">LLM 配置</p>
-          <label class="field">
-            <span>API Key</span>
-            <input id="apiKey" type="password" autocomplete="off">
-          </label>
-          <label class="field">
-            <span>模型名称</span>
-            <input id="modelName" type="text" value="gpt-4.1-mini">
-          </label>
-          <label class="field">
-            <span>API Base URL</span>
-            <input id="baseUrl" type="text" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1">
-          </label>
-          <label class="field">
-            <span>报告输出目录</span>
-            <input id="reportDir" type="text" value="reports">
-          </label>
-          <p id="saveHint" class="save-hint">配置会自动保存</p>
-        </section>
+        <div class="sidebar-top">
+          <div class="brand-block">
+            <p class="eyebrow">AI Research Workflow</p>
+            <h1>ResearchMind</h1>
+            <p class="sidebar-copy">从主题检索、论文筛选到中文研究报告，一条链路完成研究梳理。</p>
+          </div>
+          <nav class="sidebar-nav" aria-label="主导航">
+            <button class="nav-item active" type="button" data-module="topic-analysis">主题论文分析</button>
+            <button class="nav-item" type="button" data-module="conference-trends">会议论文近期趋势</button>
+          </nav>
+        </div>
+        <div class="sidebar-footer">
+          <button id="openSettingsButton" class="settings-button" type="button">设置</button>
+        </div>
       </aside>
 
       <main class="content">
-        <section class="panel hero">
-          <p class="eyebrow">AI Research Workflow</p>
-          <h1>ResearchMind</h1>
-          <p class="hero-copy">输入研究主题，抓取真实论文，完成单篇分析、趋势统计与中文研究报告生成。</p>
+        <section id="topic-analysis-view" class="module-view">
+          <section class="panel hero">
+            <p class="eyebrow">主题论文分析</p>
+            <h2>围绕研究主题抓取论文并生成报告</h2>
+            <p class="hero-copy">选定数据库、时间范围与抓取数量，ResearchMind 自动论文抓取、筛选分析、趋势归纳与研究总结</p>
+          </section>
+
+          <section class="panel topic-panel">
+            <div class="field field-wide">
+              <span>数据库</span>
+              <div id="databaseTabs" class="database-tabs" role="tablist" aria-label="论文数据库"></div>
+            </div>
+            <label class="field field-wide">
+              <span>研究主题</span>
+              <input id="topicInput" type="text" value="AI Agent" placeholder="例如：AI Agent / RAG / Multimodal">
+            </label>
+            <div class="topic-grid">
+              <label class="field">
+                <span>起始日期</span>
+                <div class="date-picker-field">
+                  <input id="startDateInput" type="text" inputmode="none" placeholder="yy/mm/dd" readonly>
+                  <input id="startDatePicker" class="date-picker-native" type="date" aria-label="起始日期">
+                </div>
+              </label>
+              <label class="field">
+                <span>终止日期</span>
+                <div class="date-picker-field">
+                  <input id="endDateInput" type="text" inputmode="none" placeholder="yy/mm/dd" readonly>
+                  <input id="endDatePicker" class="date-picker-native" type="date" aria-label="终止日期">
+                </div>
+              </label>
+              <label class="field">
+                <span>抓取数量</span>
+                <input id="maxResultsInput" type="number" min="1" max="20" value="5">
+              </label>
+            </div>
+            <p class="save-hint">单次请求最多抓取 20 篇论文，且只会在当前选中的数据库中抓取。</p>
+            <button id="runButton" type="button">生成报告</button>
+          </section>
+
+          <section id="stage-grid" class="stage-grid"></section>
+          <section id="result-panel" class="panel result-panel"></section>
         </section>
 
-        <section class="panel topic-panel">
-          <label class="field field-wide">
-            <span>研究主题</span>
-            <input id="topicInput" type="text" value="AI Agent" placeholder="例如：AI Agent / RAG / Multimodal">
-          </label>
-          <label class="field">
-            <span>起始日期</span>
-            <div class="date-picker-field">
-              <input id="startDateInput" type="text" inputmode="none" placeholder="yy/mm/dd" readonly>
-              <input id="startDatePicker" class="date-picker-native" type="date" aria-label="起始日期">
-            </div>
-          </label>
-          <label class="field">
-            <span>终止日期</span>
-            <div class="date-picker-field">
-              <input id="endDateInput" type="text" inputmode="none" placeholder="yy/mm/dd" readonly>
-              <input id="endDatePicker" class="date-picker-native" type="date" aria-label="终止日期">
-            </div>
-          </label>
-          <label class="field">
-            <span>抓取数量</span>
-            <input id="maxResultsInput" type="number" min="1" max="20" value="5">
-          </label>
-          <p class="save-hint">单次请求最多抓取 20 篇论文。</p>
-          <button id="runButton" type="button">生成报告</button>
+        <section id="conference-trends-view" class="module-view hidden">
+          <section class="panel module-empty-state">
+            <p class="eyebrow">会议论文近期趋势</p>
+            <h2>即将上线</h2>
+            <p>暂无内容，后续这里会提供会议维度的近期趋势观察与热点变化。</p>
+          </section>
         </section>
-
-        <section id="stage-grid" class="stage-grid"></section>
-        <section id="result-panel" class="panel result-panel"></section>
       </main>
     </div>
+
+    <div id="settingsModal" class="modal-shell hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <section class="panel settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">设置</p>
+            <h2 id="settingsModalTitle">LLM 配置</h2>
+          </div>
+          <button id="closeSettingsButton" class="modal-close" type="button" aria-label="关闭设置">×</button>
+        </div>
+        <label class="field">
+          <span>API Key</span>
+          <input id="apiKey" type="password" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>模型名称</span>
+          <input id="modelName" type="text" value="gpt-4.1-mini">
+        </label>
+        <label class="field">
+          <span>API Base URL</span>
+          <input id="baseUrl" type="text" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1">
+        </label>
+        <label class="field">
+          <span>报告输出目录</span>
+          <input id="reportDir" type="text" value="reports">
+        </label>
+        <p id="saveHint" class="save-hint">配置会自动保存</p>
+      </section>
+    </div>
+
     <script src="/static/selection-state.js"></script>
     <script src="/static/app.js"></script>
   </body>

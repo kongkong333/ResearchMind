@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from app.services.research_service import ResearchService
+from app.services.collectors.arxiv_source import ArxivPaperSource
 from app.services.collectors.pubmed_source import PubMedPaperSource
 
 
@@ -229,7 +230,7 @@ def test_start_run_creates_pending_run_and_tracks_completion(monkeypatch: pytest
     service = ResearchService(report_output_dir=tmp_path / "reports", settings_path=tmp_path / "settings.json")
     monkeypatch.setattr(service, "_build_llm_client", lambda **_: object())
     monkeypatch.setattr(
-        PubMedPaperSource,
+        ArxivPaperSource,
         "fetch",
         lambda self, topic, **kwargs: [
             __import__("app.services.collectors.base", fromlist=["CollectedPaper"]).CollectedPaper(
@@ -247,6 +248,7 @@ def test_start_run_creates_pending_run_and_tracks_completion(monkeypatch: pytest
 
     created = service.start_run(
         topic="AI Agent",
+        database="arxiv",
         venues=[],
         date_range=(None, None),
         openai_api_key="sk-test",
@@ -264,6 +266,7 @@ def test_start_run_creates_pending_run_and_tracks_completion(monkeypatch: pytest
 
     assert run is not None
     assert run["topic"] == "AI Agent"
+    assert run["database"] == "arxiv"
     assert run["status"] == "awaiting_selection"
     assert any(stage["stage_key"] == "collect_papers" for stage in run["stages"])
 
@@ -330,3 +333,38 @@ def test_list_papers_exposes_translated_title_when_available(tmp_path: Path) -> 
     papers = service.list_papers()
 
     assert papers[0]["title_zh"] == "AI 智能体规划"
+
+
+def test_start_run_preserves_collection_errors_for_frontend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    service = ResearchService(report_output_dir=tmp_path / "reports", settings_path=tmp_path / "settings.json")
+    monkeypatch.setattr(service, "_build_llm_client", lambda **_: object())
+
+    class FailingArxivSource:
+        def __init__(self, limit: int = 5) -> None:
+            self.limit = limit
+
+        def fetch(self, topic, **kwargs):
+            raise RuntimeError("HTTP Error 429")
+
+    monkeypatch.setattr("app.workflows.nodes.ArxivPaperSource", FailingArxivSource)
+
+    created = service.start_run(
+        topic="AI Agent",
+        database="arxiv",
+        venues=[],
+        date_range=(None, None),
+        openai_api_key="sk-test",
+        openai_model="qwen3-plus",
+        openai_base_url="",
+    )
+
+    for _ in range(100):
+        run = service.get_run(created["run_id"])
+        if run and run["status"] == "awaiting_selection":
+            break
+        time.sleep(0.02)
+    else:
+        run = service.get_run(created["run_id"])
+
+    assert run is not None
+    assert run["errors"] == ["arxiv_fetch_failed: HTTP Error 429"]

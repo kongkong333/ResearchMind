@@ -32,12 +32,17 @@ def test_root_route_serves_html_shell():
 def test_index_html_contains_required_ui_mounts():
     html = Path(r"D:\ResearchMind\app\static\index.html").read_text(encoding="utf-8")
 
-    assert "llm-settings-card" in html
+    assert "主题论文分析" in html
+    assert "会议论文近期趋势" in html
+    assert "settingsModal" in html
+    assert "database-tabs" in html
+    assert "即将上线" in html
     assert "stage-grid" in html
     assert "result-panel" in html
     assert "运行阶段" not in html
     assert "Run ID" not in html
     assert "报告预览" not in html
+    assert "Semantic Scholar" not in html
 
 
 def test_frontend_script_uses_run_polling_and_hides_markdown_preview():
@@ -45,8 +50,12 @@ def test_frontend_script_uses_run_polling_and_hides_markdown_preview():
 
     assert 'fetch("/research-runs"' in script
     assert "setInterval" in script
+    assert "selectedDatabase" in script
+    assert 'database: selectedDatabase' in script
+    assert "sortPapersByPublishedDate" in script
     assert "report_markdown" not in script
     assert "Run ID" not in script
+    assert "semanticScholarApiKey" not in script
 
 
 def test_frontend_script_allows_restart_after_selection_stage():
@@ -61,6 +70,8 @@ def test_frontend_script_renders_keyword_and_venue_chips_with_chinese_date():
 
     assert "paper-chip-list" in script
     assert "paper-venue" in script
+    assert "学科分类" in script
+    assert 'paper.source === "arxiv"' in script
     assert "formatDateValueForDisplay" in script
     assert 'type="date"' in html
     assert 'id="startDateInput"' in html

@@ -8,10 +8,12 @@ from pydantic import BaseModel, Field
 
 RunStatus = Literal["pending", "running", "completed", "failed"]
 StageStatus = Literal["pending", "running", "completed", "failed"]
+DatabaseName = Literal["pubmed", "arxiv"]
 
 
 class ResearchRunCreate(BaseModel):
     topic: str = Field(min_length=2)
+    database: DatabaseName = "pubmed"
     start_date: date | None = None
     end_date: date | None = None
     max_results: int = Field(default=5, ge=1, le=20)

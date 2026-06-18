@@ -23,6 +23,7 @@ def register_research_run_routes(app, service: ResearchService) -> None:
             try:
                 result = service.start_run(
                     topic=payload.topic,
+                    database=payload.database,
                     venues=payload.venues,
                     date_range=(payload.start_date, payload.end_date),
                     max_results=payload.max_results,
@@ -77,6 +78,7 @@ def register_research_run_routes(app, service: ResearchService) -> None:
         try:
             result = service.start_run(
                 topic=request.topic,
+                database=request.database,
                 venues=request.venues,
                 date_range=(request.start_date, request.end_date),
                 max_results=request.max_results,
@@ -126,6 +128,7 @@ def _serialize_run(result: dict[str, object]) -> dict[str, object]:
     return {
         "run_id": result["run_id"],
         "topic": result["topic"],
+        "database": result.get("database", "pubmed"),
         "status": result["status"],
         "current_message": result.get("current_message", ""),
         "stages": result.get("stages", []),

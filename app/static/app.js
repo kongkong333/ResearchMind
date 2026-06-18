@@ -1,11 +1,19 @@
 const settingsFieldIds = ["apiKey", "modelName", "baseUrl", "reportDir"];
 const MAX_RESULTS_LIMIT = 20;
+const MODULE_TOPIC_ANALYSIS = "topic-analysis";
+const MODULE_CONFERENCE_TRENDS = "conference-trends";
+const databaseOptions = [
+  { id: "pubmed", label: "PubMed" },
+  { id: "arxiv", label: "arXiv" },
+];
 
 let activeRunId = null;
 let pollHandle = null;
 let analysisStarted = false;
 let draftSelectionRunId = null;
 let draftSelectedSourceIds = null;
+let activeModule = MODULE_TOPIC_ANALYSIS;
+let selectedDatabase = "pubmed";
 
 function syncDraftSelection(run) {
   if (!run || !run.run_id) {
@@ -38,16 +46,45 @@ function updateDraftSelectionFromInput(input) {
 function formatPublishedDate(paper) {
   const publishedAt = typeof paper.published_at === "string" ? paper.published_at.trim() : "";
   if (publishedAt) {
-    const parts = publishedAt.split("-");
-    if (parts.length === 3) {
-      const [year, month, day] = parts;
-      return `${year}年${Number(month)}月${Number(day)}日`;
+    const match = publishedAt.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/);
+    if (match) {
+      const [, year, month, day] = match;
+      if (paper.source === "arxiv") {
+        return `${year}年${Number(month)}月`;
+      }
+      if (day) {
+        return `${year}年${Number(month)}月${Number(day)}日`;
+      }
     }
   }
   if (paper.year) {
     return `${paper.year}年`;
   }
   return "未知";
+}
+
+function paperTagLabel(paper) {
+  return paper.source === "arxiv" ? "学科分类" : "关键词";
+}
+
+function emptyPaperTagText(paper) {
+  return paper.source === "arxiv" ? "暂无学科分类" : "暂无关键词";
+}
+
+function sortPapersByPublishedDate(papers) {
+  return [...papers].sort((left, right) => {
+    const leftValue = String(left?.published_at || "").trim();
+    const rightValue = String(right?.published_at || "").trim();
+    if (leftValue && rightValue && leftValue !== rightValue) {
+      return rightValue.localeCompare(leftValue);
+    }
+    const leftYear = Number(left?.year || 0);
+    const rightYear = Number(right?.year || 0);
+    if (leftYear !== rightYear) {
+      return rightYear - leftYear;
+    }
+    return String(left?.title || "").localeCompare(String(right?.title || ""));
+  });
 }
 
 function formatDateValueForDisplay(isoValue) {
@@ -88,16 +125,14 @@ function normalizeDateInputValue(rawValue) {
   }
 
   const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  return {
-    iso,
-    display: formatDateValueForDisplay(iso),
-  };
+  return { iso, display: formatDateValueForDisplay(iso) };
 }
 
 function statusLabel(status) {
   if (status === "completed") return "已完成";
   if (status === "running") return "进行中";
   if (status === "failed") return "失败";
+  if (status === "awaiting_selection") return "待确认";
   return "等待中";
 }
 
@@ -106,6 +141,33 @@ function meterWidth(stage) {
     return Math.min(100, Math.round((stage.current / stage.total) * 100));
   }
   return stage.status === "completed" ? 100 : 0;
+}
+
+function databaseLabel(databaseId) {
+  const match = databaseOptions.find((option) => option.id === databaseId);
+  return match ? match.label : "PubMed";
+}
+
+function renderDatabaseTabs() {
+  const container = document.getElementById("databaseTabs");
+  if (!container) {
+    return;
+  }
+  container.innerHTML = databaseOptions.map((option) => `
+    <button
+      class="database-tab ${option.id === selectedDatabase ? "active" : ""}"
+      type="button"
+      role="tab"
+      aria-selected="${option.id === selectedDatabase ? "true" : "false"}"
+      data-database="${option.id}"
+    >${option.label}</button>
+  `).join("");
+  container.querySelectorAll("[data-database]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedDatabase = button.getAttribute("data-database") || "pubmed";
+      renderDatabaseTabs();
+    });
+  });
 }
 
 function renderStages(stages) {
@@ -130,16 +192,16 @@ function renderResult(run) {
     : run.status === "failed"
       ? "运行失败"
       : "准备开始";
-  const paperCards = (run.papers || []).map((paper, index) => {
-    const keywords = Array.isArray(paper.keywords) && paper.keywords.length
-      ? paper.keywords
-      : [];
+  const sortedPapers = sortPapersByPublishedDate(run.papers || []);
+  const paperCards = sortedPapers.map((paper, index) => {
+    const keywords = Array.isArray(paper.keywords) && paper.keywords.length ? paper.keywords : [];
     const keywordChips = keywords.length
       ? keywords.map((keyword) => `<span class="paper-chip">${escapeHtml(keyword)}</span>`).join("")
-      : '<span class="paper-chip paper-chip-muted">暂无关键词</span>';
+      : `<span class="paper-chip paper-chip-muted">${emptyPaperTagText(paper)}</span>`;
     const publicationDate = formatPublishedDate(paper);
     const venue = paper.venue ? escapeHtml(paper.venue) : "未知期刊/会议";
     const translatedTitle = typeof paper.title_zh === "string" ? paper.title_zh.trim() : "";
+    const chipLabel = paperTagLabel(paper);
     return `
       <article class="paper-card">
         <label class="paper-check">
@@ -153,8 +215,12 @@ function renderResult(run) {
         ${translatedTitle ? `<div class="paper-title-zh">${escapeHtml(translatedTitle)}</div>` : ""}
         <div class="paper-meta-row">
           <span class="paper-venue">${venue}</span>
+          <span class="paper-source">${escapeHtml(databaseLabel(paper.source || run.database || selectedDatabase))}</span>
         </div>
-        <div class="paper-chip-list">${keywordChips}</div>
+        <div class="paper-chip-section">
+          <span class="paper-chip-label">${chipLabel}</span>
+          <div class="paper-chip-list">${keywordChips}</div>
+        </div>
       </article>
     `;
   }).join("");
@@ -164,6 +230,7 @@ function renderResult(run) {
   const artifactLine = run.report_artifact_path
     ? `<div>归档文件：<code>${run.report_artifact_path}</code></div>`
     : "";
+  const databaseLine = `<div>当前数据库：<code>${escapeHtml(databaseLabel(run.database || selectedDatabase))}</code></div>`;
   const errors = run.errors && run.errors.length
     ? `<div class="error-list">${run.errors.map((error) => `<p>${error}</p>`).join("")}</div>`
     : "";
@@ -186,13 +253,14 @@ function renderResult(run) {
         <span class="section-note">${(run.papers || []).length ? `已抓取 ${(run.papers || []).length} 篇论文，展开后可下滑查看` : "等待抓取结果"}</span>
       </summary>
       <div class="paper-grid-scroll">
-      <div class="paper-grid">
-        ${paperCards || '<div class="empty-state">暂无论文概述。</div>'}
-      </div>
+        <div class="paper-grid">
+          ${paperCards || '<div class="empty-state">暂无论文概述。</div>'}
+        </div>
       </div>
     </details>
     ${actionRow}
     <div class="result-meta">
+      ${databaseLine}
       ${reportLine}
       ${artifactLine}
     </div>
@@ -206,6 +274,30 @@ function renderResult(run) {
   document.querySelectorAll('.paper-check input[type="checkbox"]').forEach((input) => {
     input.addEventListener("change", () => updateDraftSelectionFromInput(input));
   });
+}
+
+function renderModuleState() {
+  const topicView = document.getElementById("topic-analysis-view");
+  const trendsView = document.getElementById("conference-trends-view");
+  const navItems = document.querySelectorAll(".nav-item");
+  const topicActive = activeModule === MODULE_TOPIC_ANALYSIS;
+  topicView.classList.toggle("hidden", !topicActive);
+  trendsView.classList.toggle("hidden", topicActive);
+  navItems.forEach((button) => {
+    button.classList.toggle("active", button.getAttribute("data-module") === activeModule);
+  });
+}
+
+function openSettingsModal() {
+  const modal = document.getElementById("settingsModal");
+  modal.classList.remove("hidden");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById("settingsModal");
+  modal.classList.add("hidden");
+  modal.setAttribute("aria-hidden", "true");
 }
 
 async function loadSettings() {
@@ -237,6 +329,10 @@ async function saveSettings() {
 async function fetchRun(runId) {
   const response = await fetch(`/research-runs/${runId}`);
   const payload = await response.json();
+  if (payload.database) {
+    selectedDatabase = payload.database;
+    renderDatabaseTabs();
+  }
   renderStages(payload.stages || []);
   renderResult(payload);
   if (payload.status === "completed" || payload.status === "failed" || payload.status === "awaiting_selection") {
@@ -268,11 +364,13 @@ async function startAnalysisFromSelection() {
       latest_report_path: "",
       report_artifact_path: "",
       errors: [],
+      database: selectedDatabase,
     });
     return;
   }
 
-  await fetch(`/research-runs/${activeRunId}/analyze`, {
+  document.getElementById("runButton").disabled = true;
+  const response = await fetch(`/research-runs/${activeRunId}/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -282,6 +380,15 @@ async function startAnalysisFromSelection() {
       openai_base_url: document.getElementById("baseUrl").value.trim(),
     }),
   });
+  const payload = await response.json();
+  renderStages(payload.stages || []);
+  renderResult(payload);
+  if (pollHandle) {
+    window.clearInterval(pollHandle);
+  }
+  pollHandle = window.setInterval(() => {
+    fetchRun(activeRunId);
+  }, 1200);
 }
 
 async function startRun() {
@@ -301,6 +408,7 @@ async function startRun() {
       latest_report_path: "",
       report_artifact_path: "",
       errors: [],
+      database: selectedDatabase,
     });
     return;
   }
@@ -312,6 +420,7 @@ async function startRun() {
       latest_report_path: "",
       report_artifact_path: "",
       errors: [],
+      database: selectedDatabase,
     });
     return;
   }
@@ -323,6 +432,7 @@ async function startRun() {
       latest_report_path: "",
       report_artifact_path: "",
       errors: [],
+      database: selectedDatabase,
     });
     return;
   }
@@ -334,6 +444,7 @@ async function startRun() {
       latest_report_path: "",
       report_artifact_path: "",
       errors: [],
+      database: selectedDatabase,
     });
     return;
   }
@@ -355,6 +466,7 @@ async function startRun() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       topic,
+      database: selectedDatabase,
       start_date: normalizedStartDate.iso || null,
       end_date: normalizedEndDate.iso || null,
       max_results: maxResults,
@@ -366,6 +478,8 @@ async function startRun() {
   });
   const payload = await response.json();
   activeRunId = payload.run_id;
+  selectedDatabase = payload.database || selectedDatabase;
+  renderDatabaseTabs();
   renderStages(payload.stages || []);
   renderResult(payload);
   analysisStarted = false;
@@ -382,6 +496,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     input.addEventListener("change", saveSettings);
     input.addEventListener("blur", saveSettings);
   });
+
+  document.querySelectorAll(".nav-item").forEach((button) => {
+    button.addEventListener("click", () => {
+      activeModule = button.getAttribute("data-module") || MODULE_TOPIC_ANALYSIS;
+      renderModuleState();
+    });
+  });
+
+  document.getElementById("openSettingsButton").addEventListener("click", openSettingsModal);
+  document.getElementById("closeSettingsButton").addEventListener("click", closeSettingsModal);
+  document.querySelectorAll("[data-close-modal='true']").forEach((element) => {
+    element.addEventListener("click", closeSettingsModal);
+  });
+
   const startDateInput = document.getElementById("startDateInput");
   const startDatePicker = document.getElementById("startDatePicker");
   const endDateInput = document.getElementById("endDateInput");
@@ -414,6 +542,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   endDatePicker.addEventListener("blur", syncEndDateDisplay);
   document.getElementById("runButton").addEventListener("click", startRun);
 
+  renderModuleState();
+  renderDatabaseTabs();
   renderStages([
     { stage_label: "抓取论文", status: "pending", message: "", current: 0, total: 0 },
     { stage_label: "分析论文", status: "pending", message: "", current: 0, total: 0 },
@@ -427,5 +557,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     latest_report_path: "",
     report_artifact_path: "",
     errors: [],
+    database: selectedDatabase,
   });
 });

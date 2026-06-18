@@ -1,0 +1,23 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+researchmind/
+researchmind.egg-info/
+
+# Local settings and runtime logs
+.researchmind-settings.json
+.researchmind-*.log
+.researchmind-*.pid
+
+# Generated reports and local outputs
+reports/
+
+# Test code and test artifacts not needed at runtime
+tests/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

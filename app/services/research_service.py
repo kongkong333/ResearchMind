@@ -58,6 +58,7 @@ class ResearchService:
         self,
         *,
         topic: str,
+        database: str = "pubmed",
         venues: list[str] | None = None,
         date_range: tuple[object, object] = (None, None),
         max_results: int = 5,
@@ -70,6 +71,7 @@ class ResearchService:
         return self._run_workflow(
             run_id=run_id,
             topic=topic,
+            database=database,
             venues=venues,
             date_range=date_range,
             max_results=max_results,
@@ -83,6 +85,7 @@ class ResearchService:
         self,
         *,
         topic: str,
+        database: str = "pubmed",
         venues: list[str] | None = None,
         date_range: tuple[object, object] = (None, None),
         max_results: int = 5,
@@ -92,7 +95,13 @@ class ResearchService:
     ) -> dict[str, object]:
         self._validate_llm_inputs(openai_api_key=openai_api_key, openai_model=openai_model)
         run_id = uuid.uuid4().hex
-        run_state = self._empty_run_state(run_id=run_id, topic=topic, date_range=date_range, max_results=max_results)
+        run_state = self._empty_run_state(
+            run_id=run_id,
+            topic=topic,
+            database=database,
+            date_range=date_range,
+            max_results=max_results,
+        )
         with self._lock:
             self._runs[run_id] = run_state
 
@@ -101,6 +110,7 @@ class ResearchService:
             kwargs={
                 "run_id": run_id,
                 "topic": topic,
+                "database": database,
                 "venues": list(venues or []),
                 "date_range": date_range,
                 "max_results": max_results,
@@ -155,6 +165,7 @@ class ResearchService:
                 return None
             selected = list(run.get("selected_papers") or run.get("papers") or [])
             topic = str(run.get("topic", ""))
+            database = str(run.get("database", "pubmed"))
             date_range = run.get("date_range", (None, None))
             max_results = int(run.get("max_results", 5))
             venues = list(run.get("venues", []))
@@ -171,6 +182,7 @@ class ResearchService:
             kwargs={
                 "run_id": run_id,
                 "topic": topic,
+                "database": database,
                 "selected_papers": selected,
                 "venues": venues,
                 "date_range": date_range,
@@ -250,6 +262,7 @@ class ResearchService:
         *,
         run_id: str,
         topic: str,
+        database: str,
         venues: list[str] | None,
         date_range: tuple[object, object],
         max_results: int,
@@ -263,7 +276,13 @@ class ResearchService:
             openai_model=openai_model,
             openai_base_url=openai_base_url,
         )
-        state = ResearchState(topic=topic, venues=list(venues or []), date_range=date_range, max_results=max_results)
+        state = ResearchState(
+            topic=topic,
+            database=database,
+            venues=list(venues or []),
+            date_range=date_range,
+            max_results=max_results,
+        )
         result = collect_papers(state, progress_callback=progress_callback)
         result.papers = self._attach_translated_titles(result.papers)
         result = analyze_papers(result, llm_client=llm_client, progress_callback=progress_callback)
@@ -275,6 +294,7 @@ class ResearchService:
             "run_id": run_id,
             "topic": result.topic,
             "status": "completed" if not result.errors else "failed",
+            "database": result.database,
             "venues": result.venues,
             "date_range": date_range,
             "start_date": date_range[0],
@@ -301,6 +321,7 @@ class ResearchService:
         *,
         run_id: str,
         topic: str,
+        database: str,
         venues: list[str],
         date_range: tuple[object, object],
         max_results: int,
@@ -327,7 +348,13 @@ class ResearchService:
                 openai_model=openai_model,
                 openai_base_url=openai_base_url,
             )
-            state = ResearchState(topic=topic, venues=venues, date_range=date_range, max_results=max_results)
+            state = ResearchState(
+                topic=topic,
+                database=database,
+                venues=venues,
+                date_range=date_range,
+                max_results=max_results,
+            )
             current = collect_papers(state, progress_callback=on_progress)
             current.papers = self._attach_translated_titles(current.papers)
         except Exception as exc:
@@ -343,6 +370,8 @@ class ResearchService:
             run["status"] = "awaiting_selection"
             run["current_message"] = "论文抓取完成，请在前端勾选需要分析的论文。"
             run["papers"] = current.papers
+            run["database"] = database
+            run["errors"] = list(current.errors)
             run["selected_papers"] = list(current.papers)
             run["date_range"] = date_range
             run["start_date"] = date_range[0]
@@ -367,6 +396,7 @@ class ResearchService:
         *,
         run_id: str,
         topic: str,
+        database: str,
         selected_papers: list[object],
         venues: list[str],
         date_range: tuple[object, object],
@@ -394,7 +424,13 @@ class ResearchService:
                 openai_model=openai_model,
                 openai_base_url=openai_base_url,
             )
-            state = ResearchState(topic=topic, venues=venues, date_range=date_range, max_results=max_results)
+            state = ResearchState(
+                topic=topic,
+                database=database,
+                venues=venues,
+                date_range=date_range,
+                max_results=max_results,
+            )
             state.papers = selected_papers  # type: ignore[assignment]
             state.papers = self._attach_translated_titles(state.papers)
             current = analyze_papers(state, llm_client=llm_client, progress_callback=on_progress)
@@ -414,6 +450,7 @@ class ResearchService:
             run = self._runs[run_id]
             run["status"] = "completed" if not current.errors else "failed"
             run["current_message"] = "报告生成完成" if not current.errors else "运行失败"
+            run["database"] = database
             run["report_markdown"] = current.report_markdown
             run["latest_report_path"] = str(report_paths["latest"])
             run["report_path"] = str(report_paths["artifact"])
@@ -430,12 +467,14 @@ class ResearchService:
         *,
         run_id: str,
         topic: str,
+        database: str = "pubmed",
         date_range: tuple[object, object] = (None, None),
         max_results: int = 5,
     ) -> dict[str, object]:
         return {
             "run_id": run_id,
             "topic": topic,
+            "database": database,
             "status": "pending",
             "current_message": "",
             "date_range": date_range,
