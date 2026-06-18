@@ -11,8 +11,10 @@ class PaperRead(BaseModel):
     id: int
     source_id: str
     title: str
+    title_zh: str = ""
     authors: list[str]
     abstract: str
+    abstract_zh: str = ""
     year: int
     venue: str
     url: str

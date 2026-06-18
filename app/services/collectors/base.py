@@ -17,3 +17,4 @@ class CollectedPaper:
     source: str = "unknown"
     published_at: date | None = None
     title_zh: str = ""
+    abstract_zh: str = ""

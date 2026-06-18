@@ -7,6 +7,14 @@ import pytest
 from app.services.research_service import ResearchService
 
 
+@pytest.fixture(autouse=True)
+def _stub_google_translate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.services.translators.google_translate.GoogleTranslateService.translate",
+        lambda self, text, **kwargs: "",
+    )
+
+
 class _FakeLLMClient:
     def generate_structured(self, *, prompt: str, schema: dict) -> dict:
         del prompt

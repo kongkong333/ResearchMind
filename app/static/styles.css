@@ -460,16 +460,25 @@ input {
   gap: 10px;
 }
 
+.paper-abstract-section,
 .paper-chip-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+.paper-abstract-label,
 .paper-chip-label {
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--text-muted);
+}
+
+.paper-abstract-text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--text-main);
 }
 
 .paper-chip-list {

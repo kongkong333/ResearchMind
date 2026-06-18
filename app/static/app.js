@@ -201,6 +201,8 @@ function renderResult(run) {
     const publicationDate = formatPublishedDate(paper);
     const venue = paper.venue ? escapeHtml(paper.venue) : "未知期刊/会议";
     const translatedTitle = typeof paper.title_zh === "string" ? paper.title_zh.trim() : "";
+    const titleSubtitle = translatedTitle || "中文标题翻译暂不可用";
+    const translatedAbstract = typeof paper.abstract_zh === "string" ? paper.abstract_zh.trim() : "";
     const chipLabel = paperTagLabel(paper);
     return `
       <article class="paper-card">
@@ -212,10 +214,14 @@ function renderResult(run) {
           <h3>${index + 1}. ${paper.title || "未命名论文"}</h3>
           <span class="paper-date">${publicationDate}</span>
         </div>
-        ${translatedTitle ? `<div class="paper-title-zh">${escapeHtml(translatedTitle)}</div>` : ""}
+        <div class="paper-title-zh">${escapeHtml(titleSubtitle)}</div>
         <div class="paper-meta-row">
           <span class="paper-venue">${venue}</span>
           <span class="paper-source">${escapeHtml(databaseLabel(paper.source || run.database || selectedDatabase))}</span>
+        </div>
+        <div class="paper-abstract-section">
+          <div class="paper-abstract-label">中文摘要</div>
+          <p class="paper-abstract-text">${escapeHtml(translatedAbstract || "中文摘要翻译暂不可用")}</p>
         </div>
         <div class="paper-chip-section">
           <span class="paper-chip-label">${chipLabel}</span>

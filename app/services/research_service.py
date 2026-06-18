@@ -52,7 +52,7 @@ class ResearchService:
         self._runs: dict[str, dict[str, object]] = {}
         self._lock = threading.Lock()
         self._translator = GoogleTranslateService()
-        self._title_translation_cache: dict[str, str] = {}
+        self._translation_cache: dict[tuple[str, str], str] = {}
 
     def run(
         self,
@@ -206,9 +206,10 @@ class ResearchService:
                     {
                         "source_id": paper.source_id,
                         "title": paper.title,
-                        "title_zh": paper.title_zh,
+                        "title_zh": self._display_title_translation(paper),
                         "authors": paper.authors,
                         "abstract": paper.abstract,
+                        "abstract_zh": paper.abstract_zh,
                         "year": paper.year,
                         "venue": paper.venue,
                         "url": paper.url,
@@ -284,7 +285,7 @@ class ResearchService:
             max_results=max_results,
         )
         result = collect_papers(state, progress_callback=progress_callback)
-        result.papers = self._attach_translated_titles(result.papers)
+        result.papers = self._attach_localized_metadata(result.papers)
         result = analyze_papers(result, llm_client=llm_client, progress_callback=progress_callback)
         result = run_trend_analysis(result, progress_callback=progress_callback)
         result = find_research_gaps(result, progress_callback=progress_callback)
@@ -356,7 +357,7 @@ class ResearchService:
                 max_results=max_results,
             )
             current = collect_papers(state, progress_callback=on_progress)
-            current.papers = self._attach_translated_titles(current.papers)
+            current.papers = self._attach_localized_metadata(current.papers)
         except Exception as exc:
             with self._lock:
                 run = self._runs[run_id]
@@ -432,7 +433,7 @@ class ResearchService:
                 max_results=max_results,
             )
             state.papers = selected_papers  # type: ignore[assignment]
-            state.papers = self._attach_translated_titles(state.papers)
+            state.papers = self._attach_localized_metadata(state.papers)
             current = analyze_papers(state, llm_client=llm_client, progress_callback=on_progress)
             current = run_trend_analysis(current, progress_callback=on_progress)
             current = find_research_gaps(current, progress_callback=on_progress)
@@ -512,17 +513,34 @@ class ResearchService:
         return {"latest": latest_path, "artifact": artifact_path}
 
     def _attach_translated_titles(self, papers: list[CollectedPaper]) -> list[CollectedPaper]:
+        return self._attach_localized_metadata(papers)
+
+    def _attach_localized_metadata(self, papers: list[CollectedPaper]) -> list[CollectedPaper]:
         for paper in papers:
             if paper.title_zh:
-                continue
-            paper.title_zh = self._translate_title(paper.title)
+                paper.title_zh = paper.title_zh.strip()
+            else:
+                paper.title_zh = self._translate_title(paper.title)
+            if not paper.abstract_zh:
+                paper.abstract_zh = self._translate_abstract(paper.abstract)
+            paper.title_zh = self._display_title_translation(paper)
+            paper.abstract_zh = paper.abstract_zh.strip()
         return papers
 
     def _translate_title(self, title: str) -> str:
-        normalized = title.strip()
-        if not normalized or self._contains_cjk(normalized):
+        return self._translate_text(title, field="title")
+
+    def _translate_abstract(self, abstract: str) -> str:
+        return self._translate_text(abstract, field="abstract")
+
+    def _translate_text(self, text: str, *, field: str) -> str:
+        normalized = text.strip()
+        if not normalized:
             return ""
-        cached = self._title_translation_cache.get(normalized)
+        if field == "title" and self._contains_cjk(normalized):
+            return normalized
+        cache_key = (field, normalized)
+        cached = self._translation_cache.get(cache_key)
         if cached is not None:
             return cached
         translated = ""
@@ -533,8 +551,16 @@ class ResearchService:
         translated = translated.strip()
         if translated == normalized:
             translated = ""
-        self._title_translation_cache[normalized] = translated
+        self._translation_cache[cache_key] = translated
         return translated
+
+    def _display_title_translation(self, paper: CollectedPaper) -> str:
+        translated = paper.title_zh.strip()
+        if translated:
+            return translated
+        if self._contains_cjk(paper.title):
+            return paper.title.strip()
+        return "中文标题翻译暂不可用"
 
     def _contains_cjk(self, text: str) -> bool:
         return any("\u4e00" <= char <= "\u9fff" for char in text)

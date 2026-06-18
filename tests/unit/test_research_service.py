@@ -10,6 +10,14 @@ from app.services.collectors.arxiv_source import ArxivPaperSource
 from app.services.collectors.pubmed_source import PubMedPaperSource
 
 
+@pytest.fixture(autouse=True)
+def _stub_google_translate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.services.translators.google_translate.GoogleTranslateService.translate",
+        lambda self, text, **kwargs: "",
+    )
+
+
 class _FakeLLMClient:
     def generate_structured(self, *, prompt: str, schema: dict) -> dict:
         del prompt
@@ -313,12 +321,64 @@ def test_start_run_translates_paper_titles_for_selection_stage(monkeypatch: pyte
     assert run["papers"][0].title_zh == "AI 智能体规划"
 
 
+def test_start_run_translates_paper_abstracts_and_uses_title_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    service = ResearchService(report_output_dir=tmp_path / "reports", settings_path=tmp_path / "settings.json")
+    monkeypatch.setattr(service, "_build_llm_client", lambda **_: object())
+    monkeypatch.setattr(
+        PubMedPaperSource,
+        "fetch",
+        lambda self, topic, **kwargs: [
+            __import__("app.services.collectors.base", fromlist=["CollectedPaper"]).CollectedPaper(
+                source_id="1",
+                title="AI Agent Planning",
+                authors=["Ada"],
+                abstract="Planning agents.",
+                year=2026,
+                venue="PubMed",
+                url="https://example.com/1",
+                keywords=["agent", "planning"],
+            )
+        ],
+    )
+
+    def fake_translate(text: str, *, field: str) -> str:
+        if field == "title":
+            return ""
+        if field == "abstract":
+            return "智能体规划。"
+        return ""
+
+    monkeypatch.setattr(service, "_translate_text", fake_translate)
+
+    created = service.start_run(
+        topic="AI Agent",
+        venues=[],
+        date_range=(None, None),
+        openai_api_key="sk-test",
+        openai_model="qwen3-plus",
+        openai_base_url="",
+    )
+
+    for _ in range(100):
+        run = service.get_run(created["run_id"])
+        if run and run["status"] == "awaiting_selection":
+            break
+        time.sleep(0.02)
+    else:
+        run = service.get_run(created["run_id"])
+
+    assert run is not None
+    assert run["papers"][0].title_zh == "中文标题翻译暂不可用"
+    assert run["papers"][0].abstract_zh == "智能体规划。"
+
+
 def test_list_papers_exposes_translated_title_when_available(tmp_path: Path) -> None:
     service = ResearchService(report_output_dir=tmp_path)
     paper = __import__("app.services.collectors.base", fromlist=["CollectedPaper"]).CollectedPaper(
         source_id="1",
         title="AI Agent Planning",
         title_zh="AI 智能体规划",
+        abstract_zh="智能体规划。",
         authors=["Ada"],
         abstract="Planning agents.",
         year=2026,
@@ -333,6 +393,30 @@ def test_list_papers_exposes_translated_title_when_available(tmp_path: Path) -> 
     papers = service.list_papers()
 
     assert papers[0]["title_zh"] == "AI 智能体规划"
+    assert papers[0]["abstract_zh"] == "智能体规划。"
+
+
+def test_list_papers_exposes_title_placeholder_when_translation_missing(tmp_path: Path) -> None:
+    service = ResearchService(report_output_dir=tmp_path)
+    paper = __import__("app.services.collectors.base", fromlist=["CollectedPaper"]).CollectedPaper(
+        source_id="1",
+        title="AI Agent Planning",
+        title_zh="",
+        abstract_zh="",
+        authors=["Ada"],
+        abstract="Planning agents.",
+        year=2026,
+        venue="PubMed",
+        url="https://example.com/1",
+        keywords=["agent", "planning"],
+    )
+    service._runs["run-1"] = {
+        "papers": [paper],
+    }
+
+    papers = service.list_papers()
+
+    assert papers[0]["title_zh"] == "中文标题翻译暂不可用"
 
 
 def test_start_run_preserves_collection_errors_for_frontend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
