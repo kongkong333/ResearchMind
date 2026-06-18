@@ -10,11 +10,11 @@ from app.services.research_service import ResearchService
 
 try:
     from fastapi import FastAPI
-    from fastapi.responses import FileResponse
+    from fastapi.responses import HTMLResponse
     from fastapi.staticfiles import StaticFiles
 except ModuleNotFoundError:
     FastAPI = None  # type: ignore[assignment]
-    FileResponse = None  # type: ignore[assignment]
+    HTMLResponse = None  # type: ignore[assignment]
     StaticFiles = None  # type: ignore[assignment]
 
 
@@ -92,7 +92,21 @@ def _match_path(route_path: str, actual_path: str) -> dict[str, str] | None:
 
 
 def _read_index_html() -> str:
-    return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    asset_urls = {
+        "styles_css_url": _versioned_static_asset_url("styles.css"),
+        "selection_state_js_url": _versioned_static_asset_url("selection-state.js"),
+        "app_js_url": _versioned_static_asset_url("app.js"),
+    }
+    for placeholder, value in asset_urls.items():
+        html = html.replace(f"{{{{ {placeholder} }}}}", value)
+    return html
+
+
+def _versioned_static_asset_url(filename: str) -> str:
+    asset_path = STATIC_DIR / filename
+    version = int(asset_path.stat().st_mtime) if asset_path.exists() else 0
+    return f"/static/{filename}?v={version}"
 
 
 def create_app():
@@ -111,7 +125,7 @@ def create_app():
 
         @app.get("/")
         async def index():
-            return FileResponse(STATIC_DIR / "index.html")
+            return HTMLResponse(_read_index_html())
 
     app.state.research_service = service
     register_settings_routes(app, service)

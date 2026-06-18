@@ -33,6 +33,8 @@ STAGE_ORDER = [
     "generate_report",
 ]
 
+TRANSLATION_MAX_ATTEMPTS = 3
+
 
 class ResearchService:
     def __init__(
@@ -201,6 +203,7 @@ class ResearchService:
                 papers.append(
                     {
                         "source_id": paper.source_id,
+                        "source": paper.source,
                         "title": paper.title,
                         "title_zh": self._display_title_translation(paper),
                         "authors": paper.authors,
@@ -209,7 +212,9 @@ class ResearchService:
                         "year": paper.year,
                         "venue": paper.venue,
                         "url": paper.url,
+                        "pdf_url": paper.pdf_url,
                         "keywords": paper.keywords,
+                        "published_at": paper.published_at,
                     }
                 )
         return papers
@@ -536,10 +541,13 @@ class ResearchService:
         if cached is not None:
             return cached
         translated = ""
-        try:
-            translated = self._translator.translate(normalized)
-        except Exception:
-            translated = ""
+        for _ in range(TRANSLATION_MAX_ATTEMPTS):
+            try:
+                translated = self._translator.translate(normalized)
+                if translated.strip():
+                    break
+            except Exception:
+                translated = ""
         translated = translated.strip()
         if translated == normalized:
             translated = ""

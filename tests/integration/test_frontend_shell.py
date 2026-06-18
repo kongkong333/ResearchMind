@@ -25,8 +25,14 @@ def test_root_route_serves_html_shell():
     assert response.status_code == 200
     if hasattr(response, "text"):
         assert "ResearchMind" in response.text
+        assert "/static/styles.css?v=" in response.text
+        assert "/static/selection-state.js?v=" in response.text
+        assert "/static/app.js?v=" in response.text
     else:
         assert "ResearchMind" in response.json()["html"]
+        assert "/static/styles.css?v=" in response.json()["html"]
+        assert "/static/selection-state.js?v=" in response.json()["html"]
+        assert "/static/app.js?v=" in response.json()["html"]
 
 
 def test_index_html_contains_required_ui_mounts():
@@ -84,3 +90,15 @@ def test_frontend_script_renders_keyword_and_venue_chips_with_chinese_date():
     assert "placeholder=\"yy/mm/dd\"" in html
     assert "paper-title-zh" in script
     assert "end_date: normalizedEndDate.iso || null" in script
+
+
+def test_frontend_script_renders_paper_title_links_without_pdf_download_entry():
+    script = Path(r"D:\ResearchMind\app\static\app.js").read_text(encoding="utf-8")
+
+    assert "PDF下载" not in script
+    assert "paper-links" not in script
+    assert "paper-title-link" in script
+    assert "paper-pdf-link" not in script
+    assert "function resolvePaperUrl" in script
+    assert "https://pubmed.ncbi.nlm.nih.gov/" in script
+    assert "https://arxiv.org/abs/" in script

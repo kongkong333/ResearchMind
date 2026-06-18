@@ -18,6 +18,7 @@ class PaperRead(BaseModel):
     year: int
     venue: str
     url: str
+    pdf_url: str = ""
     keywords: list[str]
     published_at: date | None = None
     created_at: datetime | None = None

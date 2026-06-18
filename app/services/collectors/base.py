@@ -13,6 +13,7 @@ class CollectedPaper:
     year: int
     venue: str
     url: str
+    pdf_url: str = ""
     keywords: list[str] = field(default_factory=list)
     source: str = "unknown"
     published_at: date | None = None

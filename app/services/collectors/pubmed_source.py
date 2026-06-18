@@ -64,7 +64,12 @@ class PubMedPaperSource:
         return papers
 
     def _build_topic_query(self, topic: str) -> str:
-        return topic.strip()
+        terms = [token.strip() for token in re.findall(r"[A-Za-z0-9-]+", topic) if token.strip()]
+        if not terms:
+            return topic.strip()
+        if len(terms) == 1:
+            return f"{terms[0]}[Title/Abstract]"
+        return "(" + " AND ".join(f"{term}[Title/Abstract]" for term in terms) + ")"
 
     def _search_ids(
         self,
@@ -190,6 +195,7 @@ class PubMedPaperSource:
             year=year,
             venue=journal,
             url=f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
+            pdf_url="",
             keywords=keywords or self._infer_keywords(title, normalized_abstract),
             source="pubmed",
             published_at=publication_date,

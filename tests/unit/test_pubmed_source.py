@@ -31,6 +31,7 @@ def test_pubmed_source_builds_papers_from_pubmed_payloads() -> None:
     assert paper.venue == "Nature"
     assert paper.url == "https://pubmed.ncbi.nlm.nih.gov/12345/"
     assert paper.source == "pubmed"
+    assert paper.pdf_url == ""
     assert "agent" in paper.keywords
 
 
@@ -113,7 +114,7 @@ def test_pubmed_source_fetch_uses_topic_date_filter_and_limit(monkeypatch) -> No
         source,
         "_search_ids",
         lambda topic, sort, limit, start_date=None, end_date=None: {
-            ("agent memory", "relevance", 9, date(2025, 1, 1), None): ["4", "3", "2", "1"],
+            ("(agent[Title/Abstract] AND memory[Title/Abstract])", "relevance", 9, date(2025, 1, 1), None): ["4", "3", "2", "1"],
         }[(topic, sort, limit, start_date, end_date)],
     )
     monkeypatch.setattr(
@@ -188,11 +189,11 @@ def test_pubmed_source_fetch_uses_only_relevance_search(monkeypatch) -> None:
     source.fetch("agent memory", start_date=date(2025, 1, 1), end_date=date(2025, 6, 17))
 
     assert search_calls == [
-        ("agent memory", "relevance", 9, date(2025, 1, 1), date(2025, 6, 17)),
+        ("(agent[Title/Abstract] AND memory[Title/Abstract])", "relevance", 9, date(2025, 1, 1), date(2025, 6, 17)),
     ]
 
 
-def test_pubmed_source_search_query_uses_raw_topic_and_date_filters(monkeypatch) -> None:
+def test_pubmed_source_search_query_uses_title_abstract_terms_and_date_filters(monkeypatch) -> None:
     source = PubMedPaperSource()
     captured = []
 
@@ -209,9 +210,18 @@ def test_pubmed_source_search_query_uses_raw_topic_and_date_filters(monkeypatch)
     assert papers == []
     esearch_calls = [params for path, params in captured if path == "esearch.fcgi"]
     assert esearch_calls
-    assert esearch_calls[0]["term"] == "agent memory"
+    assert esearch_calls[0]["term"] == "(agent[Title/Abstract] AND memory[Title/Abstract])"
     assert esearch_calls[0]["mindate"] == "2025/01/01"
     assert esearch_calls[0]["maxdate"] == "2025/06/17"
     assert esearch_calls[0]["datetype"] == "pdat"
     assert esearch_calls[0]["sort"] == "relevance"
     assert len(esearch_calls) == 1
+
+
+def test_pubmed_source_builds_title_abstract_boolean_query() -> None:
+    source = PubMedPaperSource()
+
+    assert source._build_topic_query("agent memory") == "(agent[Title/Abstract] AND memory[Title/Abstract])"
+    assert source._build_topic_query("  clinical   decision support  ") == (
+        "(clinical[Title/Abstract] AND decision[Title/Abstract] AND support[Title/Abstract])"
+    )

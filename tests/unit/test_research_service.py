@@ -384,6 +384,7 @@ def test_list_papers_exposes_translated_title_when_available(tmp_path: Path) -> 
         year=2026,
         venue="PubMed",
         url="https://example.com/1",
+        pdf_url="https://arxiv.org/pdf/2501.00001v1.pdf",
         keywords=["agent", "planning"],
     )
     service._runs["run-1"] = {
@@ -394,6 +395,7 @@ def test_list_papers_exposes_translated_title_when_available(tmp_path: Path) -> 
 
     assert papers[0]["title_zh"] == "AI 智能体规划"
     assert papers[0]["abstract_zh"] == "智能体规划。"
+    assert papers[0]["pdf_url"] == "https://arxiv.org/pdf/2501.00001v1.pdf"
 
 
 def test_list_papers_exposes_title_placeholder_when_translation_missing(tmp_path: Path) -> None:
@@ -408,6 +410,7 @@ def test_list_papers_exposes_title_placeholder_when_translation_missing(tmp_path
         year=2026,
         venue="PubMed",
         url="https://example.com/1",
+        pdf_url="",
         keywords=["agent", "planning"],
     )
     service._runs["run-1"] = {
@@ -417,6 +420,43 @@ def test_list_papers_exposes_title_placeholder_when_translation_missing(tmp_path
     papers = service.list_papers()
 
     assert papers[0]["title_zh"] == "中文标题翻译暂不可用"
+    assert papers[0]["pdf_url"] == ""
+
+
+def test_translate_text_retries_until_success_and_caches_result(tmp_path: Path) -> None:
+    service = ResearchService(report_output_dir=tmp_path)
+    attempts = {"count": 0}
+
+    def flaky_translate(text: str) -> str:
+        attempts["count"] += 1
+        if attempts["count"] < 3:
+            raise RuntimeError("temporary translation failure")
+        return f"已翻译:{text}"
+
+    service._translator.translate = flaky_translate  # type: ignore[method-assign]
+
+    translated = service._translate_text("Agent Planning", field="title")
+    cached = service._translate_text("Agent Planning", field="title")
+
+    assert translated == "已翻译:Agent Planning"
+    assert cached == "已翻译:Agent Planning"
+    assert attempts["count"] == 3
+
+
+def test_translate_text_returns_empty_after_three_failures(tmp_path: Path) -> None:
+    service = ResearchService(report_output_dir=tmp_path)
+    attempts = {"count": 0}
+
+    def always_fail(_: str) -> str:
+        attempts["count"] += 1
+        raise RuntimeError("translation unavailable")
+
+    service._translator.translate = always_fail  # type: ignore[method-assign]
+
+    translated = service._translate_text("Agent Planning", field="title")
+
+    assert translated == ""
+    assert attempts["count"] == 3
 
 
 def test_start_run_preserves_collection_errors_for_frontend(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

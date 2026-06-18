@@ -141,6 +141,7 @@ def test_research_run_endpoints_return_stubbed_contract(monkeypatch: pytest.Monk
     latest_payload = get_response.json()
     assert latest_payload["status"] == "awaiting_selection"
     assert latest_payload["papers"]
+    assert latest_payload["papers"][0]["url"] == "https://example.com/p1"
     assert latest_payload["selected_source_ids"]
     assert latest_payload["report_path"] is None
     assert latest_payload["database"] == "arxiv"

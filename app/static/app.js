@@ -107,6 +107,38 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function resolvePaperUrl(paper) {
+  const explicitUrl = typeof paper?.url === "string" ? paper.url.trim() : "";
+  if (explicitUrl) {
+    return explicitUrl;
+  }
+  const sourceId = typeof paper?.source_id === "string" ? paper.source_id.trim() : "";
+  if (!sourceId) {
+    return "";
+  }
+  if (paper?.source === "pubmed") {
+    return `https://pubmed.ncbi.nlm.nih.gov/${encodeURIComponent(sourceId)}/`;
+  }
+  if (paper?.source === "arxiv") {
+    return `https://arxiv.org/abs/${encodeURIComponent(sourceId)}`;
+  }
+  return "";
+}
+
+function paperLinkMarkup(url, label, className) {
+  const normalizedUrl = typeof url === "string" ? url.trim() : "";
+  const safeLabel = escapeHtml(label);
+  if (!normalizedUrl) {
+    return `<span class="${className} is-disabled">${safeLabel}</span>`;
+  }
+  return `<a class="${className}" href="${escapeHtml(normalizedUrl)}" target="_blank" rel="noopener noreferrer">${safeLabel}</a>`;
+}
+
+function paperReferenceAvailability(paper) {
+  const pdfUrl = typeof paper?.pdf_url === "string" ? paper.pdf_url.trim() : "";
+  return `PDF：${pdfUrl ? "有" : "无"}`;
+}
+
 function normalizeDateInputValue(rawValue) {
   const normalized = String(rawValue || "").trim();
   if (!normalized) {
@@ -205,6 +237,13 @@ function renderResult(run) {
     const titleSubtitle = translatedTitle || "中文标题翻译暂不可用";
     const translatedAbstract = typeof paper.abstract_zh === "string" ? paper.abstract_zh.trim() : "";
     const chipLabel = paperTagLabel(paper);
+    const paperUrl = resolvePaperUrl(paper);
+    const pdfUrl = typeof paper.pdf_url === "string" ? paper.pdf_url.trim() : "";
+    const titleText = escapeHtml(`${index + 1}. ${paper.title || "未命名论文"}`);
+    const titleLink = paperLinkMarkup(paperUrl, titleText, "paper-title-link");
+    const pdfLink = pdfUrl
+      ? paperLinkMarkup(pdfUrl, "PDF链接", "paper-ref-link")
+      : `<span class="paper-ref-link is-disabled">无PDF链接</span>`;
     return `
       <article class="paper-card">
         <label class="paper-check">
@@ -212,13 +251,17 @@ function renderResult(run) {
           <span>纳入分析</span>
         </label>
         <div class="paper-card-head">
-          <h3>${index + 1}. ${paper.title || "未命名论文"}</h3>
+          <h3>${titleLink}</h3>
           <span class="paper-date">${publicationDate}</span>
         </div>
         <div class="paper-title-zh">${escapeHtml(titleSubtitle)}</div>
         <div class="paper-meta-row">
           <span class="paper-venue">${venue}</span>
           <span class="paper-source">${escapeHtml(databaseLabel(paper.source || run.database || selectedDatabase))}</span>
+        </div>
+        <div class="paper-meta-row">
+          <span class="paper-source">${escapeHtml(paperReferenceAvailability(paper))}</span>
+          <span class="paper-source">${pdfLink}</span>
         </div>
         <div class="paper-abstract-section">
           <div class="paper-abstract-label">中文摘要</div>

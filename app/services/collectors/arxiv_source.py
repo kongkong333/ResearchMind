@@ -99,14 +99,16 @@ class ArxivPaperSource:
             if category and category not in categories:
                 categories.append(category)
 
+        source_id = entry_id.rsplit("/", 1)[-1]
         return CollectedPaper(
-            source_id=entry_id.rsplit("/", 1)[-1],
+            source_id=source_id,
             title=title,
             authors=authors,
             abstract=abstract,
             year=published_at.year if published_at is not None else 0,
             venue="arXiv",
             url=entry_id,
+            pdf_url=f"https://arxiv.org/pdf/{source_id}.pdf",
             keywords=categories[:12],
             source=self.SOURCE_NAME,
             published_at=published_at,

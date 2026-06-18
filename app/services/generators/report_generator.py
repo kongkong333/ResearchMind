@@ -21,7 +21,18 @@ class ReportGenerator:
         return "\n\n".join(["# 研究报告", *[f"{title}\n{body}" for title, body in sections]])
 
     def _render_overview(self, topic: str, papers: list[CollectedPaper]) -> str:
-        return f"主题：{topic}\n论文数量：{len(papers)}"
+        if not papers:
+            return f"主题：{topic}\n论文数量：0"
+        lines = [
+            f"主题：{topic}",
+            f"论文数量：{len(papers)}",
+            "分析引用可用性：",
+        ]
+        for index, paper in enumerate(papers, start=1):
+            lines.append(
+                f"{index}. {paper.title.strip() or '未命名论文'} | PDF：{'有' if paper.pdf_url.strip() else '无'}"
+            )
+        return "\n".join(lines)
 
     def _render_analyses(
         self,

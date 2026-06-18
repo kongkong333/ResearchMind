@@ -80,8 +80,10 @@ def test_paper_read_supports_future_get_papers_contract() -> None:
         year=2026,
         venue="ICML",
         url="https://example.com/paper",
+        pdf_url="https://arxiv.org/pdf/2501.00001v1.pdf",
         keywords=["agent"],
     )
 
     assert payload.venue == "ICML"
     assert payload.authors == ["Ada", "Turing"]
+    assert payload.pdf_url == "https://arxiv.org/pdf/2501.00001v1.pdf"

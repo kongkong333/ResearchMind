@@ -34,6 +34,7 @@ def test_paper_analyzer_uses_llm_and_returns_expected_sections() -> None:
         year=2026,
         venue="ICLR",
         url="https://example.com/p1",
+        pdf_url="https://arxiv.org/pdf/2501.00001v1.pdf",
         keywords=["agent"],
     )
 
@@ -46,7 +47,10 @@ def test_paper_analyzer_uses_llm_and_returns_expected_sections() -> None:
     assert result.research_opportunity == "面向企业 workflow 做长期评估"
     assert client.calls
     assert "summary" in client.calls[0]["schema"]["properties"]
-    assert "1-2句" in client.calls[0]["prompt"]
+    assert "2-3句" in client.calls[0]["prompt"]
+    assert "不要假设你访问了任何外部链接、PDF 或全文" in client.calls[0]["prompt"]
+    assert "PDF链接" not in client.calls[0]["prompt"]
+    assert "HTML链接" not in client.calls[0]["prompt"]
 
 
 def test_paper_analyzer_fills_missing_fields_with_safe_defaults() -> None:

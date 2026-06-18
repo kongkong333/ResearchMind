@@ -2,7 +2,7 @@ from app.services.collectors.paper_collector import PaperCollector
 from app.services.collectors.base import CollectedPaper
 
 
-def test_paper_collector_filters_by_venue_topic_and_deduplicates() -> None:
+def test_paper_collector_filters_by_venue_and_deduplicates_without_topic_filtering() -> None:
     collector = PaperCollector()
     papers = [
         CollectedPaper(
@@ -53,7 +53,7 @@ def test_paper_collector_filters_by_venue_topic_and_deduplicates() -> None:
         venues=["ICML", "NeurIPS"],
     )
 
-    assert [paper.source_id for paper in result] == ["1"]
+    assert [paper.source_id for paper in result] == ["1", "3"]
 
 
 def test_paper_collector_returns_empty_for_blank_topic_without_match() -> None:

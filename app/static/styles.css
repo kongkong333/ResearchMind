@@ -530,7 +530,8 @@ body.sidebar-collapsed #app {
 }
 
 .paper-venue,
-.paper-source {
+.paper-source,
+.paper-title-link {
   display: inline-flex;
   align-items: center;
   padding: 5px 10px;
@@ -545,6 +546,28 @@ body.sidebar-collapsed #app {
 .paper-source {
   background: rgba(111, 141, 121, 0.12);
   color: var(--accent-deep);
+}
+
+.paper-title-link {
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.paper-title-link {
+  padding: 0;
+  color: inherit;
+}
+
+.paper-title-link:hover {
+  text-decoration: underline;
+}
+
+.paper-title-link.is-disabled {
+  color: var(--text-muted);
+  cursor: default;
+  text-decoration: none;
 }
 
 .paper-chip {

@@ -127,3 +127,39 @@ def test_report_generator_includes_bilingual_titles_when_available() -> None:
     )
 
     assert "Agent Planning（智能体规划）" in report
+
+
+def test_report_generator_overview_marks_pdf_analysis_availability() -> None:
+    generator = ReportGenerator()
+
+    report = generator.generate(
+        topic="AI Agent",
+        papers=[
+            CollectedPaper(
+                source_id="1",
+                title="PubMed Paper",
+                authors=["Ada"],
+                abstract="Abstract",
+                year=2026,
+                venue="Nature",
+                url="https://pubmed.ncbi.nlm.nih.gov/1/",
+                pdf_url="",
+                keywords=["agent"],
+            ),
+            CollectedPaper(
+                source_id="2",
+                title="arXiv Paper",
+                authors=["Turing"],
+                abstract="Abstract",
+                year=2026,
+                venue="arXiv",
+                url="https://arxiv.org/abs/2501.00001v1",
+                pdf_url="https://arxiv.org/pdf/2501.00001v1.pdf",
+                keywords=["agent"],
+            ),
+        ],
+        analyses=[],
+    )
+
+    assert "PubMed Paper | PDF：无" in report
+    assert "arXiv Paper | PDF：有" in report
