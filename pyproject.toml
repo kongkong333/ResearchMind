@@ -1,0 +1,30 @@
+[project]
+name = "researchmind"
+version = "0.1.0"
+description = "AI research agent for weekly conference reports"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.115.0,<1.0.0",
+  "openai>=1.35.0,<2.0.0",
+  "sqlalchemy>=2.0.30,<3.0.0",
+  "pydantic>=2.8.0,<3.0.0",
+  "pydantic-settings>=2.3.0,<3.0.0",
+  "streamlit>=1.36.0,<2.0.0",
+  "uvicorn>=0.30.0,<1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0,<10.0.0",
+]
+
+[tool.setuptools]
+py-modules = ["streamlit_app"]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["reports*", "tests*", "docs*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

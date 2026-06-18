@@ -1,0 +1,589 @@
+Metadata-Version: 2.4
+Name: researchmind
+Version: 0.1.0
+Summary: AI research agent for weekly conference reports
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi<1.0.0,>=0.115.0
+Requires-Dist: openai<2.0.0,>=1.35.0
+Requires-Dist: sqlalchemy<3.0.0,>=2.0.30
+Requires-Dist: pydantic<3.0.0,>=2.8.0
+Requires-Dist: pydantic-settings<3.0.0,>=2.3.0
+Requires-Dist: streamlit<2.0.0,>=1.36.0
+Requires-Dist: uvicorn<1.0.0,>=0.30.0
+Provides-Extra: dev
+Requires-Dist: pytest<10.0.0,>=8.2.0; extra == "dev"
+
+# ResearchMind
+
+ResearchMind 是一个面向研究主题的 AI Research Agent 后端。输入一个研究主题，系统会从真实论文网站抓取候选论文，经过筛选、单篇理解、趋势分析，最后输出中文 Markdown 研究报告。
+
+## 快速开机
+
+如果你只是想日常使用，不想每次手动敲命令：
+
+1. 双击 [start_researchmind.bat](/D:/ResearchMind/start_researchmind.bat)
+2. 等待浏览器自动打开 `http://127.0.0.1:8501`
+3. 在页面里输入研究主题并生成报告
+
+关闭时双击 [stop_researchmind.bat](/D:/ResearchMind/stop_researchmind.bat) 即可。
+
+第一次使用前仍需要先完成一次依赖安装，见下方“初始化安装”。
+
+## 初始化安装
+
+推荐在项目根目录执行：
+
+```powershell
+py -m venv researchmind
+researchmind\Scripts\python.exe -m pip install -e .[dev]
+```
+
+如果你已经有 `researchmind` 虚拟环境，只需要执行：
+
+```powershell
+researchmind\Scripts\python.exe -m pip install -e .[dev]
+```
+
+当前版本特点：
+
+- 已接入真实论文网站：`OpenReview`
+- 已提供 CLI 和 API
+- 已把“研究空白 / 研究机会”合并到单篇论文分析里
+- 不再为 Research Gap 单独调用一次大模型
+- README 下面这份说明按“数据怎么流动、哪里耗 token、数据源在哪里、怎么扩展”来写
+
+## 一、系统现在到底能做什么
+
+输入：
+
+- 一个研究主题，例如：`AI Agent`、`RAG`、`Multimodal`
+
+输出：
+
+- 一份中文 Markdown 报告，固定结构为：
+  - `# 研究报告`
+  - `## 一、研究概览`
+  - `## 二、重点论文解读`
+  - `## 三、研究趋势分析`
+  - `## 四、新兴研究方向`
+  - `## 五、研究机会与空白`
+  - `## 六、推荐阅读`
+
+会议范围：
+
+- `ICLR`
+- `NeurIPS`
+- `ICML`
+- `AAAI`
+
+## 二、工作流是怎么运作的
+
+工作流入口：
+
+- [app/workflows/research_graph.py](D:\ResearchMind\app\workflows\research_graph.py)
+- [app/workflows/nodes.py](D:\ResearchMind\app\workflows\nodes.py)
+
+共享状态对象：
+
+- [app/workflows/state.py](D:\ResearchMind\app\workflows\state.py)
+
+核心状态字段：
+
+- `run_id`
+- `topic`
+- `date_range`
+- `venues`
+- `papers`
+- `paper_analyses`
+- `trend_snapshot`
+- `research_gaps`
+- `report_markdown`
+- `errors`
+
+实际执行顺序：
+
+1. `collect_papers`
+2. `analyze_papers`
+3. `run_trend_analysis`
+4. `find_research_gaps`
+5. `generate_report`
+
+注意：
+
+- 第 4 步 `find_research_gaps` 现在只是把单篇分析里已经生成的“研究空白 / 研究机会”做聚合总结
+- 它不再单独调用大模型
+
+## 三、数据流
+
+### Step 1：从真实论文网站拉原始数据
+
+当前真实数据源：
+
+- `OpenReview`
+
+代码位置：
+
+- [app/services/collectors/openreview_source.py](D:\ResearchMind\app\services\collectors\openreview_source.py)
+
+这一步做的事：
+
+- 先请求 OpenReview conference group 元数据
+- 读取 group 里的：
+  - `submission_id`
+  - `submission_venue_id`
+  - `decision_heading_map`
+- 再尝试按这些真实配置去请求 `notes`
+
+这一步返回的是标准化前的网页/API 数据，随后会被转成统一结构。
+
+### Step 2：标准化成 `CollectedPaper`
+
+统一数据结构定义在：
+
+- [app/services/collectors/base.py](D:\ResearchMind\app\services\collectors\base.py)
+
+字段包括：
+
+- `source_id`
+- `title`
+- `authors`
+- `abstract`
+- `year`
+- `venue`
+- `url`
+- `keywords`
+- `source`
+
+这里的目的只有一个：
+
+- 不管以后你接的是 OpenReview、会议官网、还是别的网站，进入系统内部时都统一成 `CollectedPaper`
+
+### Step 3：规则过滤
+
+代码位置：
+
+- [app/services/collectors/paper_collector.py](D:\ResearchMind\app\services\collectors\paper_collector.py)
+
+这一步只做本地规则处理：
+
+- 按 venue 过滤
+- 按 topic 文本匹配
+- 去重
+
+输入：
+
+- 一批 `CollectedPaper`
+
+输出：
+
+- 与 topic 相关且会议匹配的论文列表
+
+这一层不调用大模型。
+
+### Step 4：单篇论文理解
+
+代码位置：
+
+- [app/services/analyzers/paper_analyzer.py](D:\ResearchMind\app\services\analyzers\paper_analyzer.py)
+
+Prompt 位置：
+
+- [app/services/llm/prompts.py](D:\ResearchMind\app\services\llm\prompts.py)
+
+Schema 位置：
+
+- [app/services/llm/schemas.py](D:\ResearchMind\app\services\llm\schemas.py)
+
+每篇论文要提取：
+
+- `problem`
+- `method`
+- `innovation`
+- `results`
+- `limitations`
+- `research_gap`
+- `research_opportunity`
+
+这里是第一个大模型调用点。
+
+### Step 5：趋势分析
+
+代码位置：
+
+- [app/services/analyzers/trend_analyzer.py](D:\ResearchMind\app\services\analyzers\trend_analyzer.py)
+
+这一层只做本地统计：
+
+- 高频关键词
+- 热门主题
+- 年份增长信号
+
+输出：
+
+- `hot_keywords`
+- `hot_topics`
+- `growth_signals`
+- `summary`
+
+这一层不调用大模型。
+
+### Step 6：研究空白与机会聚合
+
+代码位置：
+
+- [app/services/analyzers/research_gap_finder.py](D:\ResearchMind\app\services\analyzers\research_gap_finder.py)
+
+把每篇论文分析结果中的：
+
+- `research_gap`
+- `research_opportunity`
+- `limitations`
+
+做成聚合输出：
+
+- `gaps`
+- `summary`
+
+也就是说：
+
+- 论文级的 gap / opportunity 在 `PaperAnalyzer` 那一步已经生成
+- 这里仅仅做拼接和归纳
+
+### Step 7：生成报告
+
+代码位置：
+
+- [app/services/generators/report_generator.py](D:\ResearchMind\app\services\generators\report_generator.py)
+
+报告生成当前是模板拼接，不额外调用大模型。
+
+报告会综合：
+
+- 论文列表
+- 单篇分析
+- 趋势分析
+- 聚合后的研究空白与机会
+
+### Step 8：落盘输出
+
+代码位置：
+
+- [app/services/research_service.py](D:\ResearchMind\app\services\research_service.py)
+
+生成文件：
+
+- 最新报告：
+  - `reports/weekly_report.md`
+- 每次 run 的唯一报告：
+  - `reports/weekly_report_<run_id>.md`
+
+## 四、哪里会消耗 token
+
+当前设计里，只有单篇论文分析会消耗大模型 token。
+
+### 会消耗 token 的步骤
+
+1. `PaperAnalyzer`
+   - 每篇论文一次调用
+   - 输入通常是：
+     - 标题
+     - 摘要
+     - 关键词
+   - 输出：
+     - `problem`
+     - `method`
+     - `innovation`
+     - `results`
+     - `limitations`
+     - `research_gap`
+     - `research_opportunity`
+
+### 不会消耗 token 的步骤
+
+这些步骤当前都是本地规则或模板逻辑：
+
+- `OpenReviewPaperSource`
+- `PaperCollector`
+- `TrendAnalyzer`
+- `ResearchGapFinder`（当前只是聚合）
+- `ReportGenerator`
+- `ResearchService`
+
+### 为什么这样改
+
+你刚刚提的要求是：
+
+- “研究空白和机会应该在单篇分析论文时输出每篇的研究机会和空白，最后拼接即可。不要分开调用大模型。”
+
+现在代码已经按这个思路收敛：
+
+- 只有单篇分析消耗 token
+- 不会再多做一次“全局 gap 分析”的模型调用
+
+## 五、当前真实论文数据源在哪里
+
+当前真实数据源代码：
+
+- [app/services/collectors/openreview_source.py](D:\ResearchMind\app\services\collectors\openreview_source.py)
+
+当前接入方式：
+
+- 通过 OpenReview 官方公开 API
+- 先请求 `groups`
+- 再根据 group 里的 metadata 组织 `notes` 查询
+
+支持的 conference group 模式写在：
+
+- `OpenReviewPaperSource.VENUE_GROUP_PATTERNS`
+
+当前映射：
+
+- `ICLR -> ICLR.cc/{year}/Conference`
+- `NeurIPS -> NeurIPS.cc/{year}/Conference`
+- `ICML -> ICML.cc/{year}/Conference`
+- `AAAI -> AAAI.org/{year}/Conference`
+
+说明：
+
+- 这已经是“真实网站接入”，不是内置假论文
+- 但 OpenReview 不同会议对公开 note 的暴露方式不完全一致
+- 所以 adapter 当前会优先按 venue group metadata 动态构造查询
+- 某些会议年份可能返回 0 条，这是网站本身公开策略或 query 条件差异导致的，不再回退为假数据
+
+## 六、如果要添加新的数据源，怎么做
+
+最简单的扩展方式是照着 `OpenReviewPaperSource` 再写一个 adapter。
+
+### 你需要遵守的唯一内部契约
+
+所有外部数据源最终都必须输出：
+
+- `list[CollectedPaper]`
+
+统一结构定义在：
+
+- [app/services/collectors/base.py](D:\ResearchMind\app\services\collectors\base.py)
+
+### 添加步骤
+
+1. 在 `app/services/collectors/` 新增一个 source 文件
+   - 例如：
+     - `app/services/collectors/conference_site_source.py`
+     - `app/services/collectors/semantic_scholar_source.py`
+
+2. 让它返回 `CollectedPaper`
+
+3. 在 [app/workflows/nodes.py](D:\ResearchMind\app\workflows\nodes.py) 的 `collect_papers()` 里接入它
+
+4. 继续复用：
+   - `PaperCollector.collect_from_papers(...)`
+
+这样你就不用重写：
+
+- venue 过滤
+- topic 筛选
+- 去重逻辑
+
+### 推荐的数据源分层方式
+
+推荐保持这种结构：
+
+1. `Source Adapter`
+   - 负责抓网站 / API
+
+2. `Normalizer`
+   - 把原始字段转成 `CollectedPaper`
+
+3. `PaperCollector`
+   - 做规则过滤
+
+4. `PaperAnalyzer`
+   - 做单篇大模型理解
+
+### 新增数据源示例
+
+```python
+from app.services.collectors.base import CollectedPaper
+
+
+class MyConferenceSource:
+    def fetch(self, topic: str, venues: list[str]) -> list[CollectedPaper]:
+        del topic
+        del venues
+        return [
+            CollectedPaper(
+                source_id="example-1",
+                title="Example Paper",
+                authors=["Author A"],
+                abstract="Abstract text",
+                year=2026,
+                venue="ICLR",
+                url="https://example.com/paper",
+                keywords=["agent", "planning"],
+                source="example-site",
+            )
+        ]
+```
+
+然后在 [app/workflows/nodes.py](D:\ResearchMind\app\workflows\nodes.py) 的 `collect_papers()` 里替换或并联：
+
+```python
+if papers is None:
+    papers = MyConferenceSource().fetch(state.topic, state.venues)
+```
+
+## 七、API 怎么用，字段怎么填
+
+服务入口：
+
+- [app/main.py](D:\ResearchMind\app\main.py)
+
+启动：
+
+```powershell
+py -m uvicorn app.main:app --reload
+```
+
+### 1. 创建一个研究任务
+
+接口：
+
+- `POST /research-runs`
+
+请求体：
+
+```json
+{
+  "topic": "AI Agent",
+  "start_date": "2026-06-01",
+  "end_date": "2026-06-07",
+  "venues": ["ICLR", "NeurIPS", "ICML", "AAAI"]
+}
+```
+
+字段解释：
+
+- `topic`
+  - 必填
+  - 研究主题
+
+- `start_date`
+  - 选填
+  - 当前版本只是保留在 state 中，还没有严格参与远端查询
+
+- `end_date`
+  - 选填
+  - 当前版本只是保留在 state 中，还没有严格参与远端查询
+
+- `venues`
+  - 选填
+  - 不填时默认：
+    - `ICLR`
+    - `NeurIPS`
+    - `ICML`
+    - `AAAI`
+
+示例：
+
+```powershell
+curl -X POST http://127.0.0.1:8000/research-runs ^
+  -H "Content-Type: application/json" ^
+  -d "{\"topic\":\"AI Agent\",\"venues\":[\"ICLR\",\"NeurIPS\"]}"
+```
+
+### 2. 查询任务状态
+
+接口：
+
+- `GET /research-runs/{run_id}`
+
+示例：
+
+```powershell
+curl http://127.0.0.1:8000/research-runs/<run_id>
+```
+
+### 3. 获取报告内容
+
+接口：
+
+- `GET /research-runs/{run_id}/report`
+
+示例：
+
+```powershell
+curl http://127.0.0.1:8000/research-runs/<run_id>/report
+```
+
+### 4. 查看当前进程内已采集论文
+
+接口：
+
+- `GET /papers`
+
+说明：
+
+- 只返回当前 app 进程里已经跑过的 run 所收集到的论文
+- 不会隐式创建 run
+- 如果还没跑过任务，会返回空列表
+
+## 八、CLI 怎么用
+
+入口：
+
+- [scripts/run_research.py](D:\ResearchMind\scripts\run_research.py)
+
+直接运行：
+
+```powershell
+py scripts/run_research.py --topic "AI Agent"
+```
+
+指定输出目录：
+
+```powershell
+py scripts/run_research.py --topic "AI Agent" --report-dir "reports"
+```
+
+输出文件：
+
+- `reports/weekly_report.md`
+- `reports/weekly_report_<run_id>.md`
+
+## 九、当前有哪些限制
+
+当前版本已经不是“假流程”，但仍然是 MVP：
+
+1. 真实数据源已经接到 OpenReview
+   - 但不同会议/年份的公开 note 查询规则并不完全统一
+
+2. 运行状态仍在内存里
+   - `ResearchService` 还没有把 run 元数据持久化到数据库
+
+3. 报告写文件已完成
+   - 但数据库持久化的 workflow run / report 还没完全打通到服务层
+
+4. 单篇分析现在是唯一的大模型调用位点
+   - 这是为了节省 token
+   - 也符合你刚才的要求
+
+## 十、测试
+
+全量测试：
+
+```powershell
+py -m pytest -v
+```
+
+只跑单测：
+
+```powershell
+py -m pytest tests/unit -v
+```
+
+只跑集成测试：
+
+```powershell
+py -m pytest tests/integration -v
+```
