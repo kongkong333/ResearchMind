@@ -119,7 +119,7 @@ def test_research_run_endpoints_return_stubbed_contract(monkeypatch: pytest.Monk
     created = create_response.json()
     run_id = created["run_id"]
     assert created["status"] in {"pending", "running", "awaiting_selection"}
-    assert len(created["stages"]) == 5
+    assert len(created["stages"]) == 3
     assert created["database"] == "arxiv"
     assert fetch_calls
     assert fetch_calls[0]["topic"] == "agent systems"

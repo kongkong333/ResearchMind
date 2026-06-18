@@ -14,6 +14,7 @@ let draftSelectionRunId = null;
 let draftSelectedSourceIds = null;
 let activeModule = MODULE_TOPIC_ANALYSIS;
 let selectedDatabase = "pubmed";
+let isSidebarCollapsed = false;
 
 function syncDraftSelection(run) {
   if (!run || !run.run_id) {
@@ -256,7 +257,7 @@ function renderResult(run) {
     <details class="paper-overview" ${(run.papers || []).length ? "open" : ""}>
       <summary class="section-head paper-overview-summary">
         <p class="eyebrow">论文概述</p>
-        <span class="section-note">${(run.papers || []).length ? `已抓取 ${(run.papers || []).length} 篇论文，展开后可下滑查看` : "等待抓取结果"}</span>
+        <span class="section-note">${(run.papers || []).length ? `已抓取 ${(run.papers || []).length} 篇论文，可同时查看多篇` : "等待抓取结果"}</span>
       </summary>
       <div class="paper-grid-scroll">
         <div class="paper-grid">
@@ -292,6 +293,17 @@ function renderModuleState() {
   navItems.forEach((button) => {
     button.classList.toggle("active", button.getAttribute("data-module") === activeModule);
   });
+}
+
+function applySidebarState() {
+  document.body.classList.toggle("sidebar-collapsed", isSidebarCollapsed);
+  const toggleButton = document.getElementById("sidebarToggleButton");
+  if (!toggleButton) {
+    return;
+  }
+  toggleButton.textContent = isSidebarCollapsed ? "❯" : "❮";
+  toggleButton.setAttribute("aria-expanded", isSidebarCollapsed ? "false" : "true");
+  toggleButton.setAttribute("aria-label", isSidebarCollapsed ? "展开侧边栏" : "收缩侧边栏");
 }
 
 function openSettingsModal() {
@@ -510,6 +522,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  document.getElementById("sidebarToggleButton").addEventListener("click", () => {
+    isSidebarCollapsed = !isSidebarCollapsed;
+    applySidebarState();
+  });
+
   document.getElementById("openSettingsButton").addEventListener("click", openSettingsModal);
   document.getElementById("closeSettingsButton").addEventListener("click", closeSettingsModal);
   document.querySelectorAll("[data-close-modal='true']").forEach((element) => {
@@ -553,10 +570,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   renderStages([
     { stage_label: "抓取论文", status: "pending", message: "", current: 0, total: 0 },
     { stage_label: "分析论文", status: "pending", message: "", current: 0, total: 0 },
-    { stage_label: "统计趋势", status: "pending", message: "", current: 0, total: 0 },
-    { stage_label: "汇总研究机会与空白", status: "pending", message: "", current: 0, total: 0 },
     { stage_label: "生成报告", status: "pending", message: "", current: 0, total: 0 },
   ]);
+  applySidebarState();
   renderResult({
     status: "pending",
     current_message: "填写主题后即可开始生成。",

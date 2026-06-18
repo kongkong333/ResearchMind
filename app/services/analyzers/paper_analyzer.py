@@ -9,6 +9,7 @@ from app.services.llm.schemas import PAPER_ANALYSIS_SCHEMA
 
 @dataclass(slots=True)
 class PaperAnalysisResult:
+    summary: str = ""
     problem: str = ""
     method: str = ""
     innovation: str = ""
@@ -30,6 +31,7 @@ class PaperAnalyzer:
         if not isinstance(payload, dict):
             return PaperAnalysisResult()
         return PaperAnalysisResult(
+            summary=self._normalize_text(payload.get("summary")),
             problem=self._normalize_text(payload.get("problem")),
             method=self._normalize_text(payload.get("method")),
             innovation=self._normalize_text(payload.get("innovation")),

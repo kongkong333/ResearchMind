@@ -45,6 +45,7 @@ class _RecordingLLMClient:
         del prompt
         del schema
         return {
+            "summary": "本文归纳了一种面向复杂任务的智能体方法，并展示了稳定的实验效果。",
             "problem": "问题",
             "method": "方法",
             "innovation": "创新",
@@ -96,6 +97,7 @@ def test_analyze_papers_emits_per_paper_progress_events() -> None:
     assert events[1].message == "正在分析论文 1/2"
     assert events[2].message == "正在分析论文 2/2"
     assert len(state.paper_analyses) == 2
+    assert state.paper_analyses[0]["summary"] == "本文归纳了一种面向复杂任务的智能体方法，并展示了稳定的实验效果。"
 
 
 def test_analyze_papers_emits_zero_progress_for_empty_input() -> None:

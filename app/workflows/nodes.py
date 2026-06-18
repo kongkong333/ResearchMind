@@ -15,8 +15,6 @@ from app.workflows.state import ResearchState
 STAGE_LABELS = {
     "collect_papers": "抓取论文",
     "analyze_papers": "分析论文",
-    "run_trend_analysis": "统计趋势",
-    "find_research_gaps": "汇总研究机会与空白",
     "generate_report": "生成报告",
 }
 
@@ -185,7 +183,7 @@ def find_research_gaps(
         progress_callback,
         stage_key="find_research_gaps",
         status="running",
-        message="正在汇总研究机会与空白",
+        message="正在整理研究机会",
     )
     gap_finder = finder or ResearchGapFinder()
     analyses = [_dict_to_paper_analysis(item) for item in state.paper_analyses]
@@ -205,7 +203,7 @@ def find_research_gaps(
         progress_callback,
         stage_key="find_research_gaps",
         status="completed",
-        message="研究机会与空白汇总完成",
+        message="研究机会整理完成",
     )
     return state
 
@@ -223,15 +221,11 @@ def generate_report(
         message="正在生成最终报告",
     )
     report_generator = generator or ReportGenerator()
-    trends = _dict_to_trend_result(state.trend_snapshot)
-    gaps = _dict_to_gap_result(state.research_gaps)
     analyses = [_dict_to_paper_analysis(item) for item in state.paper_analyses]
     state.report_markdown = report_generator.generate(
         topic=state.topic,
         papers=state.papers,
         analyses=analyses,
-        trends=trends,
-        gaps=gaps,
     )
     _emit_progress(
         progress_callback,
@@ -244,6 +238,7 @@ def generate_report(
 
 def _paper_analysis_to_dict(result: PaperAnalysisResult) -> dict[str, str]:
     return {
+        "summary": result.summary,
         "problem": result.problem,
         "method": result.method,
         "innovation": result.innovation,
@@ -257,6 +252,7 @@ def _paper_analysis_to_dict(result: PaperAnalysisResult) -> dict[str, str]:
 def _dict_to_paper_analysis(item: dict[str, str] | None) -> PaperAnalysisResult:
     payload = item or {}
     return PaperAnalysisResult(
+        summary=str(payload.get("summary", "")),
         problem=str(payload.get("problem", "")),
         method=str(payload.get("method", "")),
         innovation=str(payload.get("innovation", "")),

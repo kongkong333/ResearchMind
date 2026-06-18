@@ -10,7 +10,8 @@ if TYPE_CHECKING:
 
 def build_paper_analysis_prompt(paper: CollectedPaper) -> str:
     return (
-        "请提炼以下论文的 problem、method、innovation、results、limitations、research_gap、research_opportunity：\n"
+        "请用中文提炼以下论文的 summary、problem、method、innovation、results、limitations、research_gap、research_opportunity。\n"
+        "其中 summary 需写成 1-2句归纳，概括论文做了什么、如何做、效果如何；其余字段保持简洁。\n"
         f"标题：{paper.title}\n摘要：{paper.abstract}\n关键词：{', '.join(paper.keywords)}"
     )
 

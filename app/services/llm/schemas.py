@@ -5,6 +5,7 @@ PAPER_ANALYSIS_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
     "properties": {
+        "summary": {"type": "string"},
         "problem": {"type": "string"},
         "method": {"type": "string"},
         "innovation": {"type": "string"},

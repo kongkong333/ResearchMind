@@ -56,6 +56,8 @@ def test_frontend_script_uses_run_polling_and_hides_markdown_preview():
     assert "report_markdown" not in script
     assert "Run ID" not in script
     assert "semanticScholarApiKey" not in script
+    assert 'stage_label: "统计趋势"' not in script
+    assert 'stage_label: "研究机会"' not in script
 
 
 def test_frontend_script_allows_restart_after_selection_stage():

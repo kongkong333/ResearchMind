@@ -452,3 +452,14 @@ def test_start_run_preserves_collection_errors_for_frontend(monkeypatch: pytest.
 
     assert run is not None
     assert run["errors"] == ["arxiv_fetch_failed: HTTP Error 429"]
+
+
+def test_run_skips_unused_trend_and_gap_analysis(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    service = ResearchService(report_output_dir=tmp_path)
+    monkeypatch.setattr(service, "_build_llm_client", lambda **kwargs: _FakeLLMClient())
+
+    result = service.run(topic="agent systems", openai_api_key="test-key", openai_model="gpt-4.1-mini")
+
+    assert not hasattr(__import__("app.services.research_service", fromlist=["unused"]), "run_trend_analysis")
+    assert not hasattr(__import__("app.services.research_service", fromlist=["unused"]), "find_research_gaps")
+    assert result["report_markdown"].startswith("# 研究报告")

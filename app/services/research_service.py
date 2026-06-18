@@ -14,9 +14,7 @@ from app.workflows.nodes import (
     STAGE_LABELS,
     analyze_papers,
     collect_papers,
-    find_research_gaps,
     generate_report,
-    run_trend_analysis,
 )
 from app.workflows.progress import ProgressEvent
 from app.workflows.state import ResearchState
@@ -32,8 +30,6 @@ DEFAULT_FRONTEND_SETTINGS = {
 STAGE_ORDER = [
     "collect_papers",
     "analyze_papers",
-    "run_trend_analysis",
-    "find_research_gaps",
     "generate_report",
 ]
 
@@ -287,8 +283,6 @@ class ResearchService:
         result = collect_papers(state, progress_callback=progress_callback)
         result.papers = self._attach_localized_metadata(result.papers)
         result = analyze_papers(result, llm_client=llm_client, progress_callback=progress_callback)
-        result = run_trend_analysis(result, progress_callback=progress_callback)
-        result = find_research_gaps(result, progress_callback=progress_callback)
         result = generate_report(result, progress_callback=progress_callback)
         report_paths = self._write_report(run_id, result.report_markdown)
         payload = {
@@ -435,8 +429,6 @@ class ResearchService:
             state.papers = selected_papers  # type: ignore[assignment]
             state.papers = self._attach_localized_metadata(state.papers)
             current = analyze_papers(state, llm_client=llm_client, progress_callback=on_progress)
-            current = run_trend_analysis(current, progress_callback=on_progress)
-            current = find_research_gaps(current, progress_callback=on_progress)
             current = generate_report(current, progress_callback=on_progress)
             report_paths = self._write_report(run_id, current.report_markdown)
         except Exception as exc:
@@ -460,7 +452,7 @@ class ResearchService:
             run["research_gaps"] = current.research_gaps
             run["errors"] = current.errors
             for stage in run["stages"]:
-                if stage["stage_key"] in {"analyze_papers", "run_trend_analysis", "find_research_gaps", "generate_report"}:
+                if stage["stage_key"] in {"analyze_papers", "generate_report"}:
                     stage["status"] = "completed" if not current.errors else "failed"
 
     def _empty_run_state(

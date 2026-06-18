@@ -15,6 +15,7 @@ class StubLLMClient:
 def test_paper_analyzer_uses_llm_and_returns_expected_sections() -> None:
     client = StubLLMClient(
         {
+            "summary": "本文提出分层智能体规划框架，并结合记忆与工具反馈提升复杂任务稳定性。",
             "problem": "解决规划不稳定问题",
             "method": "提出分层 agent 框架",
             "innovation": "结合记忆与工具反馈",
@@ -38,11 +39,14 @@ def test_paper_analyzer_uses_llm_and_returns_expected_sections() -> None:
 
     result = analyzer.analyze(paper)
 
+    assert result.summary == "本文提出分层智能体规划框架，并结合记忆与工具反馈提升复杂任务稳定性。"
     assert result.problem == "解决规划不稳定问题"
     assert result.limitations == "仅在英文任务评测"
     assert result.research_gap == "缺少真实业务环境验证"
     assert result.research_opportunity == "面向企业 workflow 做长期评估"
     assert client.calls
+    assert "summary" in client.calls[0]["schema"]["properties"]
+    assert "1-2句" in client.calls[0]["prompt"]
 
 
 def test_paper_analyzer_fills_missing_fields_with_safe_defaults() -> None:
@@ -61,6 +65,7 @@ def test_paper_analyzer_fills_missing_fields_with_safe_defaults() -> None:
 
     result = analyzer.analyze(paper)
 
+    assert result.summary == ""
     assert result.problem == "问题定义"
     assert result.method == ""
     assert result.innovation == ""
@@ -84,6 +89,7 @@ def test_paper_analyzer_handles_invalid_payload_type_with_safe_fallback() -> Non
 
     result = analyzer.analyze(paper)
 
+    assert result.summary == ""
     assert result.problem == ""
     assert result.method == ""
     assert result.limitations == ""
