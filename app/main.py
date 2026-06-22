@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.api.routes.conference_trends import register_conference_trend_routes
 from app.api.routes.papers import register_paper_routes
 from app.api.routes.research_runs import RouteHTTPError, register_research_run_routes
 from app.api.routes.settings import register_settings_routes
@@ -97,6 +98,7 @@ def _read_index_html() -> str:
         "styles_css_url": _versioned_static_asset_url("styles.css"),
         "selection_state_js_url": _versioned_static_asset_url("selection-state.js"),
         "app_js_url": _versioned_static_asset_url("app.js"),
+        "conference_trends_js_url": _versioned_static_asset_url("conference-trends.js"),
     }
     for placeholder, value in asset_urls.items():
         html = html.replace(f"{{{{ {placeholder} }}}}", value)
@@ -130,6 +132,7 @@ def create_app():
     app.state.research_service = service
     register_settings_routes(app, service)
     register_research_run_routes(app, service)
+    register_conference_trend_routes(app, service)
     register_paper_routes(app, service)
     return app
 

@@ -37,3 +37,15 @@ RESEARCH_GAP_SCHEMA = {
         "summary": {"type": "string"},
     },
 }
+
+CONFERENCE_TREND_SCHEMA = {
+    "type": "object",
+    "required": ["summary", "hot_methods", "hot_applications", "emerging_signals"],
+    "additionalProperties": False,
+    "properties": {
+        "summary": {"type": "string"},
+        "hot_methods": {"type": "array", "items": {"type": "string"}},
+        "hot_applications": {"type": "array", "items": {"type": "string"}},
+        "emerging_signals": {"type": "array", "items": {"type": "string"}},
+    },
+}

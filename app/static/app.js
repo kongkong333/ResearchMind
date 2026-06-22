@@ -624,4 +624,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     errors: [],
     database: selectedDatabase,
   });
+  window.ResearchMindSaveSettings = saveSettings;
+  if (window.ResearchMindConferenceTrends && typeof window.ResearchMindConferenceTrends.init === "function") {
+    window.ResearchMindConferenceTrends.init();
+  }
 });

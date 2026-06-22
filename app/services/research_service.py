@@ -7,7 +7,10 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.core.config import get_settings
+from app.services.analyzers.conference_trend_analyzer import ConferenceTrendAnalyzer
 from app.services.collectors.base import CollectedPaper
+from app.services.collectors.aaai_source import AAAIProceedingsSource
+from app.services.collectors.openreview_source import OpenReviewPaperSource
 from app.services.llm.client import LLMClient
 from app.services.translators.google_translate import GoogleTranslateService
 from app.workflows.nodes import (
@@ -34,6 +37,10 @@ STAGE_ORDER = [
 ]
 
 TRANSLATION_MAX_ATTEMPTS = 3
+CONFERENCE_STAGE_LABELS = {
+    "collect_papers": "抓取 Accepted 论文",
+    "analyze_trends": "归纳热点趋势",
+}
 
 
 class ResearchService:
@@ -120,6 +127,61 @@ class ResearchService:
         )
         thread.start()
         return self.get_run(run_id) or run_state
+
+    def start_conference_trend_run(
+        self,
+        *,
+        conference: str,
+        year: int,
+        limit: int = 100,
+        tracks: list[str] | None = None,
+        openai_api_key: str | None = None,
+        openai_model: str | None = None,
+        openai_base_url: str | None = None,
+    ) -> dict[str, object]:
+        self._validate_llm_inputs(openai_api_key=openai_api_key, openai_model=openai_model)
+        run_id = uuid.uuid4().hex
+        run_state = self._empty_conference_trend_state(
+            run_id=run_id,
+            conference=conference,
+            year=year,
+            limit=limit,
+        )
+        with self._lock:
+            self._runs[run_id] = run_state
+
+        thread = threading.Thread(
+            target=self._run_conference_trend,
+            kwargs={
+                "run_id": run_id,
+                "conference": conference,
+                "year": year,
+                "limit": limit,
+                "tracks": list(tracks or []),
+                "openai_api_key": openai_api_key,
+                "openai_model": openai_model,
+                "openai_base_url": openai_base_url,
+            },
+            daemon=True,
+        )
+        thread.start()
+        return self.get_run(run_id) or run_state
+
+    def list_conference_tracks(self, *, conference: str, year: int) -> list[dict[str, str]]:
+        alias = conference.strip().lower()
+        if alias != "aaai":
+            return []
+        tracks = AAAIProceedingsSource().list_tracks(year)
+        return [
+            {
+                "track_id": item.track_id,
+                "title": item.title,
+                "url": item.url,
+                "theme": item.theme,
+                "series": item.series,
+            }
+            for item in tracks
+        ]
 
     def get_run(self, run_id: str) -> dict[str, object] | None:
         with self._lock:
@@ -460,6 +522,81 @@ class ResearchService:
                 if stage["stage_key"] in {"analyze_papers", "generate_report"}:
                     stage["status"] = "completed" if not current.errors else "failed"
 
+    def _run_conference_trend(
+        self,
+        *,
+        run_id: str,
+        conference: str,
+        year: int,
+        limit: int,
+        tracks: list[str],
+        openai_api_key: str | None,
+        openai_model: str | None,
+        openai_base_url: str | None,
+    ) -> None:
+        def set_stage(stage_key: str, *, status: str, message: str, current: int = 0, total: int = 0) -> None:
+            with self._lock:
+                run = self._runs[run_id]
+                run["status"] = "running" if status == "running" else run["status"]
+                run["current_message"] = message
+                for stage in run["stages"]:
+                    if stage["stage_key"] == stage_key:
+                        stage["status"] = status
+                        stage["message"] = message
+                        stage["current"] = current
+                        stage["total"] = total
+                        break
+
+        try:
+            set_stage("collect_papers", status="running", message="正在抓取 OpenReview accepted 论文")
+            papers = self._fetch_conference_papers(conference=conference, year=year, limit=limit, tracks=tracks)
+            if not papers:
+                raise ValueError("未抓取到任何 accepted 论文。")
+            set_stage(
+                "collect_papers",
+                status="completed",
+                message=f"已抓取 {len(papers)} 篇 accepted 论文",
+                current=len(papers),
+                total=len(papers),
+            )
+            set_stage("analyze_trends", status="running", message="正在归纳会议热点趋势")
+            llm_client = self._build_llm_client(
+                openai_api_key=openai_api_key,
+                openai_model=openai_model,
+                openai_base_url=openai_base_url,
+            )
+            result = ConferenceTrendAnalyzer(llm_client).analyze(
+                conference=conference,
+                year=year,
+                papers=papers,
+            )
+        except Exception as exc:
+            with self._lock:
+                run = self._runs[run_id]
+                run["status"] = "failed"
+                run["current_message"] = str(exc)
+                run["errors"] = [str(exc)]
+            return
+
+        with self._lock:
+            run = self._runs[run_id]
+            run["status"] = "completed"
+            run["current_message"] = "会议趋势分析完成"
+            run["papers"] = papers
+            run["trend_snapshot"] = {
+                "summary": result.summary,
+                "hot_methods": result.hot_methods,
+                "hot_applications": result.hot_applications,
+                "emerging_signals": result.emerging_signals,
+                "paper_count": len(papers),
+            }
+            for stage in run["stages"]:
+                if stage["stage_key"] == "analyze_trends":
+                    stage["status"] = "completed"
+                    stage["message"] = "热点趋势归纳完成"
+                    stage["current"] = len(papers)
+                    stage["total"] = len(papers)
+
     def _empty_run_state(
         self,
         *,
@@ -500,6 +637,49 @@ class ResearchService:
             "trend_snapshot": None,
             "research_gaps": [],
         }
+
+    def _empty_conference_trend_state(
+        self,
+        *,
+        run_id: str,
+        conference: str,
+        year: int,
+        limit: int,
+    ) -> dict[str, object]:
+        return {
+            "run_id": run_id,
+            "run_kind": "conference_trend",
+            "conference": conference,
+            "year": year,
+            "topic": f"{conference} {year}",
+            "database": "openreview",
+            "tracks": [],
+            "status": "pending",
+            "current_message": "",
+            "max_results": limit,
+            "stages": [
+                {
+                    "stage_key": stage_key,
+                    "stage_label": stage_label,
+                    "status": "pending",
+                    "message": "",
+                    "current": 0,
+                    "total": 0,
+                }
+                for stage_key, stage_label in CONFERENCE_STAGE_LABELS.items()
+            ],
+            "errors": [],
+            "papers": [],
+            "trend_snapshot": None,
+        }
+
+    def _fetch_conference_papers(self, *, conference: str, year: int, limit: int, tracks: list[str]) -> list[CollectedPaper]:
+        alias = conference.strip().lower()
+        if alias == "aaai":
+            if not tracks:
+                raise ValueError("请先选择至少一个 AAAI track。")
+            return AAAIProceedingsSource().fetch(year=year, track_ids=tracks, limit=limit)
+        return OpenReviewPaperSource().fetch(conference, year=year, limit=limit)
 
     def _write_report(self, run_id: str, report_markdown: str) -> dict[str, Path]:
         self._report_output_dir.mkdir(parents=True, exist_ok=True)

@@ -72,11 +72,45 @@
         </section>
 
         <section id="conference-trends-view" class="module-view hidden">
-          <section class="panel module-empty-state">
+          <section class="panel hero">
             <p class="eyebrow">会议论文近期趋势</p>
-            <h2>即将上线</h2>
-            <p>暂无内容，后续这里会提供会议维度的近期趋势观察与热点变化。</p>
+            <h2>抓取 OpenReview accepted 论文并归纳热点趋势</h2>
+            <p class="hero-copy">按会议与年份抓取 accepted 标题，再交给大模型提炼方法热点、应用热点与值得关注的新信号。</p>
           </section>
+          <section class="panel topic-panel conference-panel">
+            <div class="conference-grid">
+              <label class="field">
+                <span>会议</span>
+                <select id="conferenceSelect">
+                  <option value="iclr">ICLR</option>
+                  <option value="neurips">NeurIPS</option>
+                  <option value="icml">ICML</option>
+                  <option value="colm">COLM</option>
+                  <option value="aaai">AAAI</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>年份</span>
+                <input id="conferenceYearInput" type="number" min="2013" max="2100" value="2025">
+              </label>
+              <label class="field">
+                <span>论文数量</span>
+                <input id="conferenceLimitInput" type="number" min="1" max="500" value="100">
+              </label>
+            </div>
+            <section id="conferenceTrackSection" class="conference-track-section hidden">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">AAAI Tracks</p>
+                  <span id="conferenceTrackHint" class="section-note">选择年份后将自动加载可选 track。</span>
+                </div>
+              </div>
+              <div id="conferenceTrackList" class="conference-track-list"></div>
+            </section>
+            <button id="conferenceRunButton" type="button">开始趋势分析</button>
+          </section>
+          <section id="conference-stage-grid" class="stage-grid"></section>
+          <section id="conference-result-panel" class="panel result-panel"></section>
         </section>
       </main>
     </div>
@@ -113,5 +147,6 @@
 
     <script src="{{ selection_state_js_url }}"></script>
     <script src="{{ app_js_url }}"></script>
+    <script src="{{ conference_trends_js_url }}"></script>
   </body>
 </html>
