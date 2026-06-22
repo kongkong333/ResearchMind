@@ -1,6 +1,0 @@
-{
-  "openai_api_key": "sk-ws-H.REXXPID.ppdA.MEUCIHG8FJIDOJPdB83Usk3pnPLwssmr9kGxxvBecP7_sC2WAiEAxb7Ex_wxkx-KjO18LDBvFGfUIvxalsOLl1lJYTJ0za4",
-  "openai_model": "qwen3.7-plus",
-  "openai_base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-  "report_output_dir": "reports"
-}

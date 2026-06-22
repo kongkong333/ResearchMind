@@ -6,6 +6,8 @@ __pycache__/
 venv/
 researchmind/
 researchmind.egg-info/
+.env
+.env.*
 
 # Local settings and runtime logs
 .researchmind-settings.json
