@@ -97,12 +97,24 @@
     const signalTags = Array.isArray(snapshot.emerging_signals)
       ? snapshot.emerging_signals.map((item) => `<span class="paper-chip">${escapeHtml(item)}</span>`).join("")
       : "";
-    const paperItems = papers.map((paper, index) => `
+    const paperItems = papers.map((paper, index) => {
+      const title = escapeHtml(paper.title || "未命名论文");
+      const titleZh = escapeHtml(paper.title_zh || "中文标题翻译暂不可用");
+      const url = typeof paper.url === "string" ? paper.url.trim() : "";
+      const linkAttrs = url
+        ? `href="${escapeHtml(url)}" target="_blank" rel="noreferrer"`
+        : 'href="#" aria-disabled="true"';
+      const linkClass = `paper-title-link${url ? "" : " is-disabled"}`;
+      return `
       <li class="conference-paper-item">
         <span class="conference-paper-index">${index + 1}.</span>
-        <a class="paper-title-link" href="${escapeHtml(paper.url || "#")}" target="_blank" rel="noreferrer">${escapeHtml(paper.title || "未命名论文")}</a>
+        <div class="conference-paper-copy">
+          <a class="${linkClass}" ${linkAttrs}>${title}</a>
+          <p class="conference-paper-translation">${titleZh}</p>
+        </div>
       </li>
-    `).join("");
+    `;
+    }).join("");
     panel.innerHTML = `
       <p class="eyebrow">趋势结果</p>
       <h2>${run.status === "completed" ? "会议趋势已生成" : "等待趋势分析"}</h2>

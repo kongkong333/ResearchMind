@@ -384,9 +384,21 @@ body.sidebar-collapsed #app {
 .conference-paper-item {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   color: var(--text-main);
+}
+
+.conference-paper-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.conference-paper-translation {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
 }
 
 .conference-paper-index {

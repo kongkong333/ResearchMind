@@ -677,15 +677,18 @@ class ResearchService:
 
     def _fetch_conference_papers(self, *, conference: str, year: int, limit: int, tracks: list[str]) -> list[CollectedPaper]:
         alias = conference.strip().lower()
+        papers: list[CollectedPaper]
         if alias == "aaai":
             if not tracks:
                 raise ValueError("请先选择至少一个 AAAI track。")
-            return AAAIProceedingsSource().fetch(year=year, track_ids=tracks, limit=limit)
-        if alias == "coling":
-            return ColingProceedingsSource().fetch(year=year, limit=limit)
-        if alias == "icme":
-            return IcmeProceedingsSource().fetch(year=year, limit=limit)
-        return OpenReviewPaperSource().fetch(conference, year=year, limit=limit)
+            papers = AAAIProceedingsSource().fetch(year=year, track_ids=tracks, limit=limit)
+        elif alias == "coling":
+            papers = ColingProceedingsSource().fetch(year=year, limit=limit)
+        elif alias == "icme":
+            papers = IcmeProceedingsSource().fetch(year=year, limit=limit)
+        else:
+            papers = OpenReviewPaperSource().fetch(conference, year=year, limit=limit)
+        return self._attach_localized_metadata(papers)
 
     def _write_report(self, run_id: str, report_markdown: str) -> dict[str, Path]:
         self._report_output_dir.mkdir(parents=True, exist_ok=True)
