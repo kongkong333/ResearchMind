@@ -5,6 +5,8 @@
     { id: "icml", label: "ICML" },
     { id: "colm", label: "COLM" },
     { id: "aaai", label: "AAAI" },
+    { id: "coling", label: "COLING" },
+    { id: "icme", label: "ICME" },
   ];
 
   let activeConferenceRunId = null;

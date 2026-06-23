@@ -10,6 +10,8 @@ from app.core.config import get_settings
 from app.services.analyzers.conference_trend_analyzer import ConferenceTrendAnalyzer
 from app.services.collectors.base import CollectedPaper
 from app.services.collectors.aaai_source import AAAIProceedingsSource
+from app.services.collectors.coling_source import ColingProceedingsSource
+from app.services.collectors.icme_source import IcmeProceedingsSource
 from app.services.collectors.openreview_source import OpenReviewPaperSource
 from app.services.llm.client import LLMClient
 from app.services.translators.google_translate import GoogleTranslateService
@@ -548,7 +550,7 @@ class ResearchService:
                         break
 
         try:
-            set_stage("collect_papers", status="running", message="正在抓取 OpenReview accepted 论文")
+            set_stage("collect_papers", status="running", message="正在抓取会议 accepted 论文")
             papers = self._fetch_conference_papers(conference=conference, year=year, limit=limit, tracks=tracks)
             if not papers:
                 raise ValueError("未抓取到任何 accepted 论文。")
@@ -652,7 +654,7 @@ class ResearchService:
             "conference": conference,
             "year": year,
             "topic": f"{conference} {year}",
-            "database": "openreview",
+            "database": conference,
             "tracks": [],
             "status": "pending",
             "current_message": "",
@@ -679,6 +681,10 @@ class ResearchService:
             if not tracks:
                 raise ValueError("请先选择至少一个 AAAI track。")
             return AAAIProceedingsSource().fetch(year=year, track_ids=tracks, limit=limit)
+        if alias == "coling":
+            return ColingProceedingsSource().fetch(year=year, limit=limit)
+        if alias == "icme":
+            return IcmeProceedingsSource().fetch(year=year, limit=limit)
         return OpenReviewPaperSource().fetch(conference, year=year, limit=limit)
 
     def _write_report(self, run_id: str, report_markdown: str) -> dict[str, Path]:

@@ -83,8 +83,11 @@ def test_frontend_script_uses_run_polling_and_hides_markdown_preview():
     assert "limit: limitValue" in conference_script
     assert "tracks," in conference_script
     assert '"aaai"' in conference_script
+    assert '"coling"' in conference_script
+    assert '"icme"' in conference_script
     assert '"bibm"' not in conference_script
     assert "selectedTrackIds()" in conference_script
+    assert "OpenReview accepted" not in conference_script
 
 
 def test_conference_button_reuses_primary_run_button_styles():
@@ -142,4 +145,7 @@ def test_conference_view_lists_added_openreview_conferences():
     html = Path(r"D:\ResearchMind\app\static\index.html").read_text(encoding="utf-8")
 
     assert '<option value="aaai">AAAI</option>' in html
+    assert '<option value="coling">COLING</option>' in html
+    assert '<option value="icme">ICME</option>' in html
     assert '<option value="bibm">BIBM</option>' not in html
+    assert "抓取 OpenReview accepted 论文并归纳热点趋势" not in html
