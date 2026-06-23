@@ -49,6 +49,81 @@ class _AnchorCollector(HTMLParser):
         self._text_parts = []
 
 
+class _ArticleSummaryCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._container_depth = 0
+        self._title_anchor_href: str | None = None
+        self._title_anchor_text: list[str] = []
+        self._current_anchor_href: str | None = None
+        self._current_anchor_text: list[str] = []
+        self._inside_title = False
+        self._inside_galleys = False
+        self.entries: list[dict[str, str]] = []
+        self._current_entry: dict[str, str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = dict(attrs)
+        class_name = attrs_dict.get("class") or ""
+
+        if tag in {"article", "div"} and "obj_article_summary" in class_name:
+            if self._container_depth == 0:
+                self._current_entry = {"title": "", "url": "", "pdf_url": ""}
+            self._container_depth += 1
+            return
+
+        if self._container_depth == 0:
+            return
+
+        if tag in {"h1", "h2", "h3", "h4", "div"} and "title" in class_name.split():
+            self._inside_title = True
+        if "galleys_links" in class_name.split():
+            self._inside_galleys = True
+        if tag == "a":
+            self._current_anchor_href = attrs_dict.get("href")
+            self._current_anchor_text = []
+            if self._inside_title:
+                self._title_anchor_href = self._current_anchor_href
+                self._title_anchor_text = []
+
+    def handle_data(self, data: str) -> None:
+        if self._container_depth == 0 or self._current_anchor_href is None:
+            return
+        self._current_anchor_text.append(data)
+        if self._inside_title and self._current_anchor_href == self._title_anchor_href:
+            self._title_anchor_text.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._container_depth == 0:
+            return
+
+        if tag == "a" and self._current_anchor_href is not None:
+            anchor_text = " ".join(part.strip() for part in self._current_anchor_text if part.strip()).strip()
+            if self._current_entry is not None:
+                if self._inside_title and self._current_anchor_href == self._title_anchor_href:
+                    self._current_entry["title"] = anchor_text
+                    self._current_entry["url"] = self._current_anchor_href or ""
+                elif self._inside_galleys and not self._current_entry.get("pdf_url") and anchor_text.lower() == "pdf":
+                    self._current_entry["pdf_url"] = self._current_anchor_href or ""
+            self._current_anchor_href = None
+            self._current_anchor_text = []
+            if self._title_anchor_href and tag == "a":
+                self._title_anchor_href = None
+                self._title_anchor_text = []
+            return
+
+        if tag in {"h1", "h2", "h3", "h4", "div"} and self._inside_title:
+            self._inside_title = False
+        if tag in {"ul", "div"} and self._inside_galleys:
+            self._inside_galleys = False
+        if tag in {"article", "div"}:
+            self._container_depth -= 1
+            if self._container_depth == 0 and self._current_entry is not None:
+                if self._current_entry.get("url") and self._current_entry.get("title"):
+                    self.entries.append(dict(self._current_entry))
+                self._current_entry = None
+
+
 class AAAIProceedingsSource:
     ARCHIVE_URL = "https://ojs.aaai.org/index.php/AAAI/issue/archive"
     BASE_URL = "https://ojs.aaai.org"
@@ -202,7 +277,9 @@ class AAAIProceedingsSource:
         papers: list[CollectedPaper] = []
         target_urls = [track_id for track_id in track_ids if track_id.strip()]
         for track_url in target_urls:
-            for href, title in self._extract_article_links(self._fetch_text(track_url)):
+            for article in self._extract_article_links(self._fetch_text(track_url)):
+                href = article["url"]
+                title = article["title"]
                 papers.append(
                     CollectedPaper(
                         source_id=href,
@@ -212,6 +289,7 @@ class AAAIProceedingsSource:
                         year=year,
                         venue=self._track_title_to_venue(track_url, year),
                         url=href,
+                        pdf_url=article.get("pdf_url", ""),
                         source="aaai",
                     )
                 )
@@ -219,11 +297,23 @@ class AAAIProceedingsSource:
                     return papers[:limit]
         return papers[:limit] if limit is not None else papers
 
-    def _extract_article_links(self, html: str) -> list[tuple[str, str]]:
+    def _extract_article_links(self, html: str) -> list[dict[str, str]]:
+        summary_collector = _ArticleSummaryCollector()
+        summary_collector.feed(html)
+        if summary_collector.entries:
+            return [
+                {
+                    "url": urljoin(self.BASE_URL, entry["url"]),
+                    "title": entry["title"],
+                    "pdf_url": urljoin(self.BASE_URL, entry["pdf_url"]) if entry.get("pdf_url") else "",
+                }
+                for entry in summary_collector.entries
+            ]
+
         collector = _AnchorCollector()
         collector.feed(html)
         seen: set[str] = set()
-        articles: list[tuple[str, str]] = []
+        articles: list[dict[str, str]] = []
         for href, text in collector.anchors:
             if "/article/view/" not in href or not text:
                 continue
@@ -231,7 +321,7 @@ class AAAIProceedingsSource:
             if article_url in seen:
                 continue
             seen.add(article_url)
-            articles.append((article_url, text))
+            articles.append({"url": article_url, "title": text, "pdf_url": ""})
         return articles
 
     def _track_title_to_venue(self, track_url: str, year: int) -> str:
