@@ -4,6 +4,7 @@ import json
 import re
 from datetime import date
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
@@ -32,13 +33,22 @@ class OpenReviewPaperSource:
         limit: int | None = None,
     ) -> list[CollectedPaper]:
         venue_id = self._resolve_venue_id(conference, year)
-        api_version = self._detect_api_version(venue_id)
+        try:
+            api_version = self._detect_api_version(venue_id)
+        except HTTPError as exc:
+            raise self._wrap_lookup_error(exc, conference=conference, year=year, venue_id=venue_id) from exc
         if api_version == 2:
-            papers = self._fetch_api2_accepted(venue_id=venue_id, year=year, limit=limit)
-            if not papers:
-                papers = self._fetch_api1_accepted(venue_id=venue_id, year=year)
+            try:
+                papers = self._fetch_api2_accepted(venue_id=venue_id, year=year, limit=limit)
+                if not papers:
+                    papers = self._fetch_api1_accepted(venue_id=venue_id, year=year)
+            except HTTPError as exc:
+                raise self._wrap_lookup_error(exc, conference=conference, year=year, venue_id=venue_id) from exc
         else:
-            papers = self._fetch_api1_accepted(venue_id=venue_id, year=year)
+            try:
+                papers = self._fetch_api1_accepted(venue_id=venue_id, year=year)
+            except HTTPError as exc:
+                raise self._wrap_lookup_error(exc, conference=conference, year=year, venue_id=venue_id) from exc
         return papers[:limit] if limit is not None else papers
 
     def _detect_api_version(self, venue_id: str) -> int:
@@ -248,6 +258,17 @@ class OpenReviewPaperSource:
             supported = ", ".join(sorted(set(self._VENUE_PATTERNS)))
             raise ValueError(f"Unsupported OpenReview conference '{conference}'. Supported values: {supported}.")
         return self._VENUE_PATTERNS[alias].format(year=year)
+
+    def _wrap_lookup_error(self, error: HTTPError, *, conference: str, year: int, venue_id: str) -> ValueError:
+        alias = conference.strip().upper() or venue_id
+        if error.code == 404:
+            return ValueError(
+                f"{alias} {year} venue was not found on OpenReview (venue id: {venue_id}, HTTP 404). "
+                "Check whether that year is available or whether the conference still uses OpenReview."
+            )
+        return ValueError(
+            f"Failed to fetch {alias} {year} from OpenReview (venue id: {venue_id}, HTTP {error.code})."
+        )
 
     def _get_json(self, path: str, params: dict[str, object], *, api_version: int = 2) -> dict[str, Any]:
         base_url = self._API2_BASE_URL if api_version == 2 else self._API1_BASE_URL

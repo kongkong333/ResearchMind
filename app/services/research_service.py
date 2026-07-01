@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.services.analyzers.conference_trend_analyzer import ConferenceTrendAnalyzer
 from app.services.collectors.base import CollectedPaper
 from app.services.collectors.aaai_source import AAAIProceedingsSource
+from app.services.collectors.colm_source import ColmAcceptedPapersSource
 from app.services.collectors.coling_source import ColingProceedingsSource
 from app.services.collectors.icme_source import IcmeProceedingsSource
 from app.services.collectors.openreview_source import OpenReviewPaperSource
@@ -682,6 +683,8 @@ class ResearchService:
             if not tracks:
                 raise ValueError("请先选择至少一个 AAAI track。")
             papers = AAAIProceedingsSource().fetch(year=year, track_ids=tracks, limit=limit)
+        elif alias == "colm":
+            papers = ColmAcceptedPapersSource().fetch(year=year, limit=limit)
         elif alias == "coling":
             papers = ColingProceedingsSource().fetch(year=year, limit=limit)
         elif alias == "icme":
